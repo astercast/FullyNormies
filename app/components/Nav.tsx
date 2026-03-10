@@ -36,7 +36,7 @@ export default function Nav() {
             # FULLNORMIES<span style={{ opacity: .2 }}>.</span>
           </div>
           <div style={{ marginTop: '.3rem', fontSize: '.75rem', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--ink-muted)' }}>
-            40×40 Faces → 120×120 Sprites
+            40×40 Faces → Full Body Sprites
           </div>
         </Link>
         <button onClick={toggle} style={{

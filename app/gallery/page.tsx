@@ -16,11 +16,13 @@ function dlGallerySprite(url: string, id: number|null, size: number, transparent
   const img = new Image()
   img.crossOrigin = 'anonymous'
   img.onload = () => {
-    const c = document.createElement('canvas'); c.width = c.height = size
+    const aspect = img.naturalHeight / img.naturalWidth
+    const w = size, h = Math.round(size * aspect)
+    const c = document.createElement('canvas'); c.width = w; c.height = h
     const ctx = c.getContext('2d')!; ctx.imageSmoothingEnabled = false
-    if (!transparent) { ctx.fillStyle = '#e3e5e4'; ctx.fillRect(0,0,size,size) }
-    ctx.drawImage(img, 0, 0, size, size)
-    const name = `normie-${id ?? 'unknown'}-sprite-${size}${transparent ? '-transparent' : ''}.png`
+    if (!transparent) { ctx.fillStyle = '#e3e5e4'; ctx.fillRect(0,0,w,h) }
+    ctx.drawImage(img, 0, 0, w, h)
+    const name = `normie-${id ?? 'unknown'}-sprite-${w}x${h}${transparent ? '-transparent' : ''}.png`
     c.toBlob(b => {
       if (!b) return
       const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(b), download: name })
@@ -102,10 +104,10 @@ function SpriteCard({ s }: { s: Sprite }) {
           zIndex: 20, minWidth: 160, boxShadow: '0 4px 16px rgba(0,0,0,.12)',
         }}>
           {[
-            { label: '120×120 PNG',           size: 120, transparent: false },
-            { label: '120px Transparent',      size: 120, transparent: true  },
-            { label: '480×480 PNG',            size: 480, transparent: false },
-            { label: '960×960 PNG',            size: 960, transparent: false },
+            { label: '200px PNG',             size: 200, transparent: false },
+            { label: '200px Transparent',      size: 200, transparent: true  },
+            { label: '480px PNG',              size: 480, transparent: false },
+            { label: '960px PNG',              size: 960, transparent: false },
           ].map((opt, i) => (
             <button key={i} style={{ ...btnBase, borderBottom: i < 3 ? '1px solid var(--line-soft)' : 'none', padding: '.38rem .6rem' }}
               onClick={() => { dlGallerySprite(s.url, s.id, opt.size, opt.transparent); setDlOpen(false) }}

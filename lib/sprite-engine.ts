@@ -9,10 +9,10 @@ export const PD: [number,number,number] = [0x48,0x49,0x4b]  // dark charcoal
 
 // -- Native sprite dimensions -------------------------------------------------
 export const SW  = 40   // sprite width  (matches Normie head width)
-export const SH  = 72   // sprite height (28 head + 44 body)
-export const HR  = 28   // head rows
-export const SCL = 5    // display upscale  (40×72 → 200×360)
-export const NORMAL_LEG_H = 15
+export const SH  = 80   // sprite height (30 head + 50 body)
+export const HR  = 30   // head rows (extra 2 rows for beards/chins)
+export const SCL = 5    // display upscale  (40×80 → 200×400)
+export const NORMAL_LEG_H = 14
 
 // -- Types --------------------------------------------------------------------
 export interface TraitAttr { trait_type: string; value: string }
@@ -33,9 +33,9 @@ export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', crouc
 
 // Reference poses — used for the 3 display cards
 export const POSE_CFG: Record<Pose, PoseCfg> = {
-  idle:   { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
-  walk:   { torsoSquash:0, lArmDx:-4, lArmDy:-2, rArmDx:4, rArmDy:2,  lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
-  crouch: { torsoSquash:2, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx: 0, rLegDx: 0, legH:9 },
+  idle:   { torsoSquash:0, lArmDx:-1, lArmDy:1,  rArmDx:1,  rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+  walk:   { torsoSquash:0, lArmDx:-4, lArmDy:-2, rArmDx:3,  rArmDy:2,  lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
+  crouch: { torsoSquash:2, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:8 },
 }
 
 // =============================================================================
@@ -50,10 +50,10 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
   //
   // ── IDLE  (gentle breathing sway) ─────────────────────────────────────────
   { label: 'Idle', frames: [
+    { torsoSquash:0, lArmDx:-1, lArmDy:0,  rArmDx:1,  rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
     { torsoSquash:0, lArmDx:-1, lArmDy:1,  rArmDx:1,  rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
-    { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+    { torsoSquash:0, lArmDx:-1, lArmDy:0,  rArmDx:1,  rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
     { torsoSquash:0, lArmDx:-1, lArmDy:1,  rArmDx:1,  rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
-    { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
   ]},
 
   //
@@ -64,23 +64,23 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
   //  visible — never flush against the torso.
   //  Legs: ±5 drift for a clear stride.
   { label: 'Walk', frames: [
-    // F1 — right contact: L arm swings forward (out+up), R arm back (in+down)
-    { torsoSquash:0, lArmDx:-5, lArmDy:-3, rArmDx:3, rArmDy:3,  lLegDx:-5, rLegDx:+5, legH:NORMAL_LEG_H   },
-    // F2 — passing: arms moderate outward, legs under hips, slight knee bend
+    // F1 — right contact: L arm forward, R arm back
+    { torsoSquash:0, lArmDx:-5, lArmDy:-3, rArmDx:3, rArmDy:2,  lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H   },
+    // F2 — passing: arms at sides, legs together, slight knee bend
     { torsoSquash:0, lArmDx:-2, lArmDy: 0, rArmDx:2, rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
-    // F3 — left contact: R arm swings forward (out+up), L arm back (in+down)
-    { torsoSquash:0, lArmDx:-3, lArmDy: 3, rArmDx:5, rArmDy:-3, lLegDx:+5, rLegDx:-5, legH:NORMAL_LEG_H   },
-    // F4 — passing: same as F2
+    // F3 — left contact: R arm forward, L arm back
+    { torsoSquash:0, lArmDx:-3, lArmDy: 2, rArmDx:5, rArmDy:-3, lLegDx:+4, rLegDx:-4, legH:NORMAL_LEG_H   },
+    // F4 — passing (mirror of F2)
     { torsoSquash:0, lArmDx:-2, lArmDy: 0, rArmDx:2, rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
   ]},
 
   //
   // ── CROUCH  (enter → hold × 2 → rise) ─────────────────────────────────────
   { label: 'Crouch', frames: [
-    { torsoSquash:1, lArmDx:-1, lArmDy: 3, rArmDx: 1, rArmDy: 3, lLegDx: 0, rLegDx: 0, legH:11 },
-    { torsoSquash:2, lArmDx:-2, lArmDy: 4, rArmDx: 2, rArmDy: 4, lLegDx: 0, rLegDx: 0, legH:9  },
-    { torsoSquash:2, lArmDx:-2, lArmDy: 5, rArmDx: 2, rArmDy: 5, lLegDx: 0, rLegDx: 0, legH:9  },
-    { torsoSquash:1, lArmDx:-1, lArmDy: 3, rArmDx: 1, rArmDy: 3, lLegDx: 0, rLegDx: 0, legH:11 },
+    { torsoSquash:1, lArmDx:-1, lArmDy: 2, rArmDx: 1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:10 },
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx: 2, rArmDy: 3, lLegDx: 0, rLegDx: 0, legH:8  },
+    { torsoSquash:2, lArmDx:-2, lArmDy: 4, rArmDx: 2, rArmDy: 4, lLegDx: 0, rLegDx: 0, legH:8  },
+    { torsoSquash:1, lArmDx:-1, lArmDy: 2, rArmDx: 1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:10 },
   ]},
 ]
 
@@ -161,44 +161,32 @@ export function drawNormie(
 
   // ── Body proportions ──────────────────────────────────────────────────────
   const buildLvl = s2 % 3   // 0=slim  1=medium  2=stocky
-  // Torso width — lean characters are narrower, stocky ones wider.
-  // Female 8-10, male 10-12, alien 7-9, young 9-11.
-  const baseTW   = isAlien ? 7 : isFemale ? 8 : isYoung ? 9 : 10
-  const tW       = baseTW + buildLvl
-  // Shoulder = torso + 2 each side. Just enough to read as shoulders.
-  const shW      = tW + 4
+  const baseTW   = isAlien ? 8 : isFemale ? 8 : isYoung ? 9 : isCat ? 10 : 10
+  const tW       = baseTW + buildLvl      // 8–12 px
+  const shW      = tW + (isFemale ? 2 : 4)  // shoulder width
   const tX       = cx - Math.floor(tW  / 2)
   const shX      = cx - Math.floor(shW / 2)
 
-  // ── HEAD (rows 0-27) ──────────────────────────────────────────────────────
+  // ── HEAD (rows 0-29) ──────────────────────────────────────────────────────
   for (let r = 0; r < HR; r++)
     for (let c = 0; c < SW; c++)
       if (pixels[r * SW + c] === '1') set(c, r, true)
 
-  // ── NECK (1 row) ──────────────────────────────────────────────────────────
-  // Narrow 4px neck gives a natural head→body separation instead of a flat join
-  const neckW = Math.min(tW - 2, 6)
-  const neckX = cx - Math.floor(neckW / 2)
-  for (let x = neckX; x < neckX + neckW; x++) set(x, HR, true)
-
-  // ── SHOULDER TAPER (rows 29-31): 3 rows lerp shoulder→torso ───────────────
-  for (let si = 0; si < 3; si++) {
-    const t  = si / 2             // 0, 0.5, 1
+  // ── SHOULDER (2 rows): quick blend from shW → tW ─────────────────────────
+  for (let si = 0; si < 2; si++) {
+    const t  = si  // 0 → full shW, 1 → tW
     const w  = Math.round(shW * (1 - t) + tW * t)
     const x0 = cx - Math.floor(w / 2)
-    for (let x = x0; x < x0 + w; x++) set(x, HR + 1 + si, true)
+    for (let x = x0; x < x0 + w; x++) set(x, HR + si, true)
   }
 
   // ── TORSO ──────────────────────────────────────────────────────────────────
-  const tY = HR + 4   // starts right after neck + 3-row shoulder taper
-  const tH = 11 - cfg.torsoSquash  // compact torso — long legs look better
+  const tY = HR + 2   // right after 2-row shoulder
+  const tH = 10 - cfg.torsoSquash  // compact solid block
 
   for (let y = 0; y < tH; y++) {
-    // Mid-torso taper: everyone narrows 1px mid-torso (natural trunk shape).
-    // Females get an extra 1px inset for waist.
-    const midTaper = (y >= 3 && y <= tH - 3) ? 1 : 0
-    const femInset = (isFemale && y >= 4 && y <= tH - 2) ? 1 : 0
-    const inset = midTaper + femInset
+    // Females: subtle 1px waist inset in mid-rows
+    const inset = (isFemale && y >= 3 && y <= tH - 2) ? 1 : 0
     for (let x = tX + inset; x < tX + tW - inset; x++) set(x, tY + y, true)
   }
 
@@ -265,25 +253,23 @@ export function drawNormie(
   set(cx-1, tY+tH-1, false); set(cx, tY+tH-1, false)
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armW  = 2 + Math.min(buildLvl, 1)   // slim=2, med/stocky=3
-  const armH  = isYoung ? 7 : 8
-  const handW = Math.min(armW + 1, 3)
+  const armW  = 2
+  const armH  = isYoung ? 6 : 8
+  const handW = 2
   const handH = 2
-  // Arms start 1px outside shoulder edge — natural gap so they read as separate limbs
-  const lArmX = shX - 1
-  const rArmX = shX + shW - armW + 1
-  const armY0 = HR + 1   // attach at 1st shoulder-taper row (below neck)
+  // Arms flush against shoulder edge — attached to body
+  const lArmX = shX
+  const rArmX = shX + shW - armW
+  const armY0 = HR   // attach at first shoulder row
 
   function fillArm(rootX: number, dx: number, dy: number) {
     for (let s = 0; s < armH; s++) {
       const t  = s / (armH - 1)
       const ax = rootX + Math.round(dx * t)
       const ay = armY0 + s + Math.round(dy * t)
-      // Forearm taper: bottom 40% narrows by 1px for armW≥3
-      const aw = (armW >= 3 && s >= armH - 3) ? armW - 1 : armW
-      for (let w = 0; w < aw; w++) set(ax + w, ay, true)
+      for (let w = 0; w < armW; w++) set(ax + w, ay, true)
     }
-    // Hand — slight offset to center on forearm tip
+    // Hand
     const hx = rootX + Math.round(dx)
     const hy = armY0 + armH + Math.round(dy)
     for (let hy2 = 0; hy2 < handH; hy2++)
@@ -298,8 +284,8 @@ export function drawNormie(
   for (let x = tX-1; x <= tX+tW; x++) set(x, hipY, true)
 
   // ── LEGS ──────────────────────────────────────────────────────────────────
-  const legW       = 3   // uniform leg width — clean silhouette at any build
-  const legGap     = isFemale ? 2 : 4   // females: narrower hip stance; males: wider
+  const legW       = 3
+  const legGap     = isFemale ? 2 : 3
   const lLegX      = cx - Math.floor((legW * 2 + legGap) / 2)
   const rLegX      = lLegX + legW + legGap
   const legY0      = hipY + 1
@@ -316,16 +302,13 @@ export function drawNormie(
       if (pantsDetail === 2 && s >= 1 && s <= 4) set(lx + lw - 1, legY0+s, false)
       if (pantsDetail === 3 && s === lh - 1) for (let x = lx; x < lx+lw+1; x++) set(x, legY0+s, true)
     }
-    // Ankle — 1-row transition
+    // Ankle
     const ankX  = Math.round(baseX + drift)
     const ankY  = legY0 + lh
     for (let w = 0; w < legW; w++) set(ankX + w, ankY, true)
-    // Shoe — compact 5×2 block
-    const shoeW = 5
+    // Shoe — 4×2
     const sX = ankX - 1; const sY = ankY + 1
-    for (let r = 0; r < 2; r++) for (let c = 0; c < shoeW; c++) set(sX+c, sY+r, true)
-    // Toe cap highlight on top row
-    set(sX, sY, false)
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) set(sX+c, sY+r, true)
   }
 
   fillLeg(lLegX, cfg.lLegDx, cfg.legH)

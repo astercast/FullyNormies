@@ -180,7 +180,7 @@ function EngineInner() {
   // dlFrame downloads the active pose at chosen scale/format
   function dlFrame(pose: Pose, scale: number, transparent = false, fmt: 'png'|'gif' = 'png') {
     const c = frames[pose]; if (!c) return
-    // c is at SCL (5x). scale=1 means native (40x72), scale=2 means 80x144, etc.
+    // c is at SCL (5x). scale=1 means native (40x80), scale=2 means 80x160, etc.
     const native = upscale(c, 1 / SCL)  // can't downscale canvas easily, re-draw
     const out = document.createElement('canvas')
     out.width  = SW * scale

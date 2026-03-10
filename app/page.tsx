@@ -36,11 +36,11 @@ function HeroSprite({ id, active }: { id: number; active: boolean }) {
         <img
           src={dataUrl}
           alt={`Normie #${id}`}
-          style={{ display: 'block', imageRendering: 'pixelated', width: 56, height: 100 }}
+          style={{ display: 'block', imageRendering: 'pixelated', width: 56, height: 112 }}
         />
       ) : (
         /* Placeholder while sprite loads — show face image at bottom */
-        <div style={{ width: 56, height: 100, position: 'relative' }}>
+        <div style={{ width: 56, height: 112, position: 'relative' }}>
           <img
             src={`https://api.normies.art/normie/${id}/image.png`}
             alt={`Normie #${id}`}
@@ -119,7 +119,7 @@ export default function Home() {
                 </div>
 
                 <p style={{ fontSize: 'clamp(.75rem,1.8vw,1rem)', color: 'var(--ink-mid)', lineHeight: 1.8, marginBottom: 'clamp(1.4rem,3.5vw,2.5rem)' }}>
-                  Turn any Normie NFT into a full-body 120×120 pixel art game sprite.
+                  Turn any Normie NFT into a full-body pixel art game sprite.
                 </p>
 
                 <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap' }}>
@@ -156,7 +156,7 @@ export default function Home() {
                 <span style={{ fontSize: '.58rem', fontWeight: 700, color: 'var(--ink)' }}>{hex} — {lbl}</span>
               </div>
             ))}
-            <span style={{ fontSize: '.5rem', color: 'var(--ink-muted)', marginLeft: 'auto' }}>2 colors · 120×120px · CC0</span>
+            <span style={{ fontSize: '.5rem', color: 'var(--ink-muted)', marginLeft: 'auto' }}>2 colors · 40×80px · CC0</span>
           </div>
         </section>
 
