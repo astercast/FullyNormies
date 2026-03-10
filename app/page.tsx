@@ -3,10 +3,54 @@ import Link from 'next/link'
 import Nav from './components/Nav'
 import Footer from './components/Footer'
 import { useEffect, useState } from 'react'
+import { drawNormie, upscale } from '@/lib/sprite-engine'
 
-// ── Strip of demo normies using the official API face images ──
-// Simple img-based strip — much more reliable than canvas rendering
+// ── Strip of demo normies using full-body sprites ──
 const DEMO_IDS = [6793, 1337, 420, 888, 3141, 2048]
+
+// Renders a single full-body normie sprite by calling /api/generate then
+// drawing with the shared sprite engine. Falls back to face image while loading.
+function HeroSprite({ id, active }: { id: number; active: boolean }) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ normieId: id }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled || !data.pixels) return
+        const canvas = upscale(drawNormie(data.pixels, data.traits, 'idle', id), 2)
+        if (!cancelled) setDataUrl(canvas.toDataURL())
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [id])
+
+  return (
+    <div style={{ background: '#e3e5e4', border: '1px solid rgba(72,73,75,.15)', padding: 3 }}>
+      {dataUrl ? (
+        <img
+          src={dataUrl}
+          alt={`Normie #${id}`}
+          style={{ display: 'block', imageRendering: 'pixelated', width: 56, height: 100 }}
+        />
+      ) : (
+        /* Placeholder while sprite loads — show face image at bottom */
+        <div style={{ width: 56, height: 100, position: 'relative' }}>
+          <img
+            src={`https://api.normies.art/normie/${id}/image.png`}
+            alt={`Normie #${id}`}
+            style={{ display: 'block', imageRendering: 'pixelated', width: 56, height: 56, position: 'absolute', bottom: 0 }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
 
 function HeroStrip() {
   const [active, setActive] = useState(0)
@@ -25,14 +69,7 @@ function HeroStrip() {
             opacity: active === i ? 1 : 0.45,
             zIndex: active === i ? 2 : 1,
           }}>
-            <div style={{ background: '#e3e5e4', border: '1px solid rgba(72,73,75,.15)', padding: 3 }}>
-              <img
-                src={`https://api.normies.art/normie/${id}/image.png`}
-                alt={`Normie #${id}`}
-                width={72} height={72}
-                style={{ display: 'block', imageRendering: 'pixelated', width: 72, height: 72 }}
-              />
-            </div>
+            <HeroSprite id={id} active={active === i} />
           </div>
         ))}
       </div>
