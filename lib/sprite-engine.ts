@@ -35,7 +35,7 @@ export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', jump:
 export const POSE_CFG: Record<Pose, PoseCfg> = {
   idle:   { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
   // Walk card shows the "right contact" frame (right foot fully forward)
-  walk:   { torsoSquash:0, lArmDx:+6, lArmDy:-3, rArmDx:-5, rArmDy:-2, lLegDx:-7, rLegDx:+8, legH:NORMAL_LEG_H },
+  walk:   { torsoSquash:0, lArmDx:-2, lArmDy:-4, rArmDx:+2, rArmDy:+2, lLegDx:-7, rLegDx:+8, legH:NORMAL_LEG_H },
   jump:   { torsoSquash:0, lArmDx:-2, lArmDy:-9, rArmDx:2,  rArmDy:-9, lLegDx:-3, rLegDx: 3, legH:7 },
   crouch: { torsoSquash:2, lArmDx:-5, lArmDy:6,  rArmDx:5,  rArmDy:6,  lLegDx:-4, rLegDx: 4, legH:8 },
 }
@@ -60,41 +60,44 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
 
   //
   // ── WALK  (4-frame stride cycle) ──────────────────────────────────────────
-  // F1 "Right contact": R-foot forward (+8), L-foot back (-7). L-arm forward, R-arm back.
-  // F2 "Mid/Down":      feet passing through (±1), bent knees (legH-2), arms neutral.
-  // F3 "Left contact":  L-foot forward (+7), R-foot back (-8). R-arm forward, L-arm back.
-  // F4 "Mid/Down":      mirror of F2.
+  // This is a FRONT-FACING sprite walking sideways — arms swing UP/DOWN (Dy dominant),
+  // not left-right (large Dx would push arms into/through the torso on front view).
+  // Legs spread wide left-right to show the stride clearly.
   { label: 'Walk', frames: [
-    { torsoSquash:0, lArmDx:+6, lArmDy:-3, rArmDx:-5, rArmDy:-2, lLegDx:-7, rLegDx:+8, legH:NORMAL_LEG_H   },
-    { torsoSquash:0, lArmDx:+1, lArmDy: 2, rArmDx:-1, rArmDy: 2, lLegDx:+1, rLegDx:-1, legH:NORMAL_LEG_H-2 },
-    { torsoSquash:0, lArmDx:-5, lArmDy:-2, rArmDx:+6, rArmDy:-3, lLegDx:+7, rLegDx:-8, legH:NORMAL_LEG_H   },
+    // F1 "Right contact" — R leg fwd, L arm swings up (opposite arm/leg)
+    { torsoSquash:0, lArmDx:-2, lArmDy:-5, rArmDx:+2, rArmDy:+3, lLegDx:-7, rLegDx:+8, legH:NORMAL_LEG_H   },
+    // F2 passing — feet under body, arms neutral, knees bent (legH-2)
+    { torsoSquash:0, lArmDx:-1, lArmDy: 2, rArmDx:+1, rArmDy: 2, lLegDx:+1, rLegDx:-1, legH:NORMAL_LEG_H-2 },
+    // F3 "Left contact" — L leg fwd, R arm swings up
+    { torsoSquash:0, lArmDx:-2, lArmDy:+3, rArmDx:+2, rArmDy:-5, lLegDx:+7, rLegDx:-8, legH:NORMAL_LEG_H   },
+    // F4 passing — same as F2
     { torsoSquash:0, lArmDx:-1, lArmDy: 2, rArmDx:+1, rArmDy: 2, lLegDx:-1, rLegDx:+1, legH:NORMAL_LEG_H-2 },
   ]},
 
   //
   // ── JUMP  (crouch-wind-up → launch → apex-tuck → land) ───────────────────
   { label: 'Jump', frames: [
-    // F1 pre-jump crouch: body squashes, arms swing down-back
-    { torsoSquash:2, lArmDx:-1, lArmDy: 5, rArmDx: 1, rArmDy: 5, lLegDx:-3, rLegDx: 3, legH:9  },
-    // F2 launch: legs fully extend, arms drive upward
-    { torsoSquash:0, lArmDx:-5, lArmDy:-5, rArmDx: 5, rArmDy:-5, lLegDx:-1, rLegDx: 1, legH:NORMAL_LEG_H },
-    // F3 apex: arms fully raised, legs tuck up (short legH)
+    // F1 pre-jump crouch: mild body squash, arms draw back
+    { torsoSquash:1, lArmDx:-1, lArmDy: 4, rArmDx: 1, rArmDy: 4, lLegDx:-2, rLegDx: 2, legH:10 },
+    // F2 launch: legs extend, arms drive upward
+    { torsoSquash:0, lArmDx:-3, lArmDy:-5, rArmDx: 3, rArmDy:-5, lLegDx:-1, rLegDx: 1, legH:NORMAL_LEG_H },
+    // F3 apex: arms raised, legs tuck up
     { torsoSquash:0, lArmDx:-2, lArmDy:-9, rArmDx: 2, rArmDy:-9, lLegDx:-3, rLegDx: 3, legH:7  },
-    // F4 land: arms spread wide for balance, legs bent on impact
-    { torsoSquash:2, lArmDx:-7, lArmDy: 3, rArmDx: 7, rArmDy: 3, lLegDx:-4, rLegDx: 4, legH:9  },
+    // F4 land: arms out for balance (moderate spread), legs absorb impact
+    { torsoSquash:1, lArmDx:-4, lArmDy: 3, rArmDx: 4, rArmDy: 3, lLegDx:-2, rLegDx: 2, legH:10 },
   ]},
 
   //
   // ── CROUCH  (enter → full crouch × 2 → rise) ─────────────────────────────
   { label: 'Crouch', frames: [
-    // F1 entering: body starting to lower, arms drift out
-    { torsoSquash:0, lArmDx:-2, lArmDy: 3, rArmDx: 2, rArmDy: 3, lLegDx:-3, rLegDx: 3, legH:11 },
-    // F2 full crouch: max squat, arms braced forward
-    { torsoSquash:2, lArmDx:-5, lArmDy: 6, rArmDx: 5, rArmDy: 6, lLegDx:-4, rLegDx: 4, legH:8  },
-    // F3 hold: slight arm-shift to feel alive
-    { torsoSquash:2, lArmDx:-4, lArmDy: 7, rArmDx: 4, rArmDy: 7, lLegDx:-4, rLegDx: 4, legH:8  },
+    // F1 entering: lower body, feet stay under
+    { torsoSquash:0, lArmDx:-2, lArmDy: 3, rArmDx: 2, rArmDy: 3, lLegDx:-1, rLegDx:+1, legH:11 },
+    // F2 full crouch: squat low, feet directly under body (no splay)
+    { torsoSquash:2, lArmDx:-3, lArmDy: 5, rArmDx: 3, rArmDy: 5, lLegDx: 0, rLegDx: 0, legH:8  },
+    // F3 hold: small arm shift to look alive
+    { torsoSquash:2, lArmDx:-2, lArmDy: 6, rArmDx: 2, rArmDy: 6, lLegDx: 0, rLegDx: 0, legH:8  },
     // F4 rising: mirror of entering
-    { torsoSquash:0, lArmDx:-2, lArmDy: 3, rArmDx: 2, rArmDy: 3, lLegDx:-3, rLegDx: 3, legH:11 },
+    { torsoSquash:0, lArmDx:-2, lArmDy: 3, rArmDx: 2, rArmDy: 3, lLegDx:-1, rLegDx:+1, legH:11 },
   ]},
 ]
 
@@ -175,9 +178,11 @@ export function drawNormie(
 
   // ── Body proportions ──────────────────────────────────────────────────────
   const buildLvl = s2 % 3   // 0=slim  1=medium  2=stocky
-  const baseTW   = isAlien ? 8 : isFemale ? 8 : isYoung ? 10 : isOld ? 12 : isCat ? 11 : 12
+  // Slimmer base widths so body doesn't look like a square block at 5x scale
+  const baseTW   = isAlien ? 7 : isFemale ? 8 : isYoung ? 9 : isOld ? 11 : isCat ? 9 : 10
   const tW       = baseTW + buildLvl
-  const shW      = tW + (isFemale || isAlien ? 2 : 4)
+  // Shoulder slightly wider than torso; females keep subtle flare
+  const shW      = tW + (isFemale || isAlien ? 2 : 3)
   const tX       = cx - Math.floor(tW  / 2)
   const shX      = cx - Math.floor(shW / 2)
 
@@ -186,21 +191,24 @@ export function drawNormie(
     for (let c = 0; c < SW; c++)
       if (pixels[r * SW + c] === '1') set(c, r, true)
 
-  // ── SHOULDER TAPER (rows 28-31): 4-row lerp shoulder→torso ───────────────
-  for (let si = 0; si < 4; si++) {
-    const t  = si / 3
+  // ── SHOULDER TAPER (rows 28-32): 5-row lerp shoulder→torso ───────────────
+  // Longer taper = gentler slope = less blocky shoulder-to-torso join
+  for (let si = 0; si < 5; si++) {
+    const t  = si / 4
     const w  = Math.round(shW * (1 - t) + tW * t)
     const x0 = cx - Math.floor(w / 2)
     for (let x = x0; x < x0 + w; x++) set(x, HR + si, true)
   }
 
   // ── TORSO ──────────────────────────────────────────────────────────────────
-  const tY = HR + 4
-  const tH = 15 - cfg.torsoSquash
+  const tY = HR + 5   // starts right after 5-row shoulder taper
+  const tH = 14 - cfg.torsoSquash
 
   for (let y = 0; y < tH; y++) {
-    // Waist pinch only for female — males stay rectangular
-    const inset = (isFemale && y >= 3 && y <= 7) ? 1 : 0
+    // Chest (rows 0-3): full width
+    // Waist (rows 4-7): 1px inset per side — visible shape for EVERYONE
+    // Hips (rows 8+): full width again → slight flare back to belt
+    const inset = (y >= 4 && y <= 7) ? 1 : 0
     for (let x = tX + inset; x < tX + tW - inset; x++) set(x, tY + y, true)
   }
 
@@ -271,9 +279,11 @@ export function drawNormie(
   const armH  = isYoung ? 10 : isOld ? 11 : 12
   const handW = armW + 1
   const handH = 3
-  const lArmX = shX
-  const rArmX = shX + shW - armW
-  const armY0 = HR
+  // Place arm roots just outside the shoulder so they're always a distinct silhouette —
+  // 1px gap between shoulder edge and arm ensures arms don't merge into the torso block
+  const lArmX = shX - 1
+  const rArmX = shX + shW + 1 - armW
+  const armY0 = HR + 1   // start 1 row into shoulder taper (shoulder then arm, cleanly)
 
   function fillArm(rootX: number, dx: number, dy: number) {
     for (let s = 0; s < armH; s++) {
@@ -298,7 +308,7 @@ export function drawNormie(
 
   // ── LEGS ──────────────────────────────────────────────────────────────────
   const pStyle     = s1 % 3
-  const legW       = [4, 3, 5][pStyle]
+  const legW       = [4, 3, 4][pStyle]  // cap at 4px — 5px legs look too blocky
   const legGap     = 2
   const lLegX      = cx - Math.floor((legW * 2 + legGap) / 2)
   const rLegX      = lLegX + legW + legGap
