@@ -179,16 +179,14 @@ function EngineInner() {
   // -- Download helpers ------------------------------------------------------
   // dlFrame downloads the active pose at chosen scale/format
   function dlFrame(pose: Pose, scale: number, transparent = false, fmt: 'png'|'gif' = 'png') {
-    const c = frames[pose]; if (!c) return
-    // c is at SCL (5x). scale=1 means native (40x80), scale=2 means 80x160, etc.
-    const native = upscale(c, 1 / SCL)  // can't downscale canvas easily, re-draw
+    if (!pixels || !normTraits) return
+    const src = drawNormie(pixels, normTraits, pose, currentId, transparent)
     const out = document.createElement('canvas')
     out.width  = SW * scale
     out.height = SH * scale
     const ctx  = out.getContext('2d')!
     ctx.imageSmoothingEnabled = false
-    if (!transparent) { ctx.fillStyle = `rgb(${PL[0]},${PL[1]},${PL[2]})`; ctx.fillRect(0,0,out.width,out.height) }
-    ctx.drawImage(c, 0, 0, out.width, out.height)
+    ctx.drawImage(src, 0, 0, out.width, out.height)
     out.toBlob(b => {
       const a = Object.assign(document.createElement('a'), {
         href: URL.createObjectURL(b!),
@@ -202,16 +200,15 @@ function EngineInner() {
   function dlSheet(scale: number, transparent = false) {
     if (!pixels || !normTraits) return
     const cols = 4, rows = ANIM_CLIPS.length
-    const fw = SW * scale, fh = SH * scale, gap = Math.max(1, scale)
+    const fw = SW * scale, fh = SH * scale
     const out = document.createElement('canvas')
-    out.width  = fw * cols + gap * (cols - 1)
-    out.height = fh * rows + gap * (rows - 1)
+    out.width  = fw * cols
+    out.height = fh * rows
     const ctx  = out.getContext('2d')!
     ctx.imageSmoothingEnabled = false
-    if (!transparent) { ctx.fillStyle = `rgb(${PL[0]},${PL[1]},${PL[2]})`; ctx.fillRect(0,0,out.width,out.height) }
     ANIM_CLIPS.forEach((clip, row) => {
       clip.frames.forEach((cfg, col) => {
-        ctx.drawImage(upscale(drawNormie(pixels, normTraits!, cfg, currentId), scale), col*(fw+gap), row*(fh+gap))
+        ctx.drawImage(upscale(drawNormie(pixels, normTraits!, cfg, currentId, transparent), scale), col*fw, row*fh)
       })
     })
     out.toBlob(b => {

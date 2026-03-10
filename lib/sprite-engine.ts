@@ -103,18 +103,21 @@ export function traitHash(id: number | null, traits: TraitsData): number {
 }
 
 // -- Canvas sprite factory ----------------------------------------------------
-function createSprite() {
+function createSprite(transparent = false) {
   const canvas = document.createElement('canvas')
   canvas.width = SW; canvas.height = SH
   const ctx = canvas.getContext('2d')!
-  ctx.fillStyle = `rgb(${PL[0]},${PL[1]},${PL[2]})`
-  ctx.fillRect(0, 0, SW, SH)
+  if (!transparent) {
+    ctx.fillStyle = `rgb(${PL[0]},${PL[1]},${PL[2]})`
+    ctx.fillRect(0, 0, SW, SH)
+  }
   const imgData = ctx.getImageData(0, 0, SW, SH)
   const px = (x: number, y: number, dark: boolean) => {
     if (x < 0 || x >= SW || y < 0 || y >= SH) return
     const i = (y * SW + x) * 4
-    const c = dark ? PD : PL
-    imgData.data[i]=c[0]; imgData.data[i+1]=c[1]; imgData.data[i+2]=c[2]; imgData.data[i+3]=255
+    const c = dark ? PD : (transparent ? null : PL)
+    if (c) { imgData.data[i]=c[0]; imgData.data[i+1]=c[1]; imgData.data[i+2]=c[2]; imgData.data[i+3]=255 }
+    else   { imgData.data[i]=0; imgData.data[i+1]=0; imgData.data[i+2]=0; imgData.data[i+3]=0 }
   }
   const flush = () => ctx.putImageData(imgData, 0, 0)
   return { canvas, px, flush }
@@ -127,9 +130,10 @@ export function drawNormie(
   pixels: string,
   traits: TraitsData,
   poseOrCfg: Pose | PoseCfg,
-  tokenId: number | null = null
+  tokenId: number | null = null,
+  transparent = false
 ): HTMLCanvasElement {
-  const { canvas, px, flush } = createSprite()
+  const { canvas, px, flush } = createSprite(transparent)
   const set = px
   const cfg = typeof poseOrCfg === 'string' ? POSE_CFG[poseOrCfg] : poseOrCfg
 
@@ -308,17 +312,17 @@ export function makeAnimSheet(
   scale = 1
 ): HTMLCanvasElement {
   const cols = 4, rows = ANIM_CLIPS.length
-  const fw = SW * scale, fh = SH * scale, gap = scale
+  const fw = SW * scale, fh = SH * scale
   const sheet = document.createElement('canvas')
-  sheet.width  = fw * cols + gap * (cols - 1)
-  sheet.height = fh * rows + gap * (rows - 1)
+  sheet.width  = fw * cols
+  sheet.height = fh * rows
   const ctx = sheet.getContext('2d')!
   ctx.imageSmoothingEnabled = false
   ANIM_CLIPS.forEach((clip, row) => {
     clip.frames.forEach((cfg, col) => {
       ctx.drawImage(
         upscale(drawNormie(pix, traits, cfg, tokenId), scale),
-        col * (fw + gap), row * (fh + gap)
+        col * fw, row * fh
       )
     })
   })
