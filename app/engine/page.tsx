@@ -10,10 +10,10 @@ import { Suspense } from 'react'
 //
 //  How it works:
 //    1. Fetch 1600-char pixel string from api.normies.art/normie/:id/pixels
-//    2. Extract the real Normie head (rows 0-27 of the 40x40 bitmap)
-//    3. Procedurally draw a full body below:  torso ? arms ? hands ? legs ? feet
+//    2. Extract the real Normie head (rows 0-31 of the 40x40 bitmap — captures beards)
+//    3. Procedurally draw a full body below:  torso → arms → hands → legs → feet
 //       All body parts reference traits (type, gender, age, accessory) for shape
-//    4. Compose into 40x72 canvas (head 28px tall + body 44px tall)
+//    4. Compose into 40x76 canvas (head 32px tall + body 44px tall)
 //    5. Generate 4 pose variants by translating/rotating limbs
 //    6. Upscale to crisp display (4x = 160x288) with nearest-neighbor
 //
@@ -27,9 +27,9 @@ const PD: [number,number,number] = [0x48,0x49,0x4b]  // dark charcoal
 
 // Native sprite dimensions
 const SW  = 40  // sprite width (matches Normie head width)
-const SH  = 72  // sprite height (28 head + 44 body)
-const HR  = 28  // head rows — consistent face cutoff across all Normies
-const SCL = 5   // display upscale (40x72 -> 200x360)
+const SH  = 76  // sprite height (32 head + 44 body)
+const HR  = 32  // head rows — 32 captures beards/chins (original face is 40 tall)
+const SCL = 5   // display upscale (40x76 -> 200x380)
 
 type Pose = 'idle' | 'walk' | 'run' | 'jump' | 'attack' | 'hurt' | 'crouch' | 'death'
 const POSES: Pose[] = ['idle', 'walk', 'run', 'jump', 'attack', 'hurt', 'crouch', 'death']
@@ -75,7 +75,7 @@ function rect(set:(x:number,y:number,d:boolean)=>void, x:number,y:number,w:numbe
 // =============================================================================
 const TORSO_X  = 14   // left edge of 12px torso (centered in 40px)
 const TORSO_W  = 12
-const TORSO_Y  = HR   // 28 -- right below head
+const TORSO_Y  = HR   // 32 -- right below head
 const TORSO_H  = 20   // rows 28-47 in idle
 const ARM_H    = 9    // arm segment length in pixels
 const LEG_W    = 4
@@ -170,12 +170,12 @@ function drawNormie(pixels: string, traits: TraitsData, pose: Pose, tokenId: num
   const tX     = cx - Math.floor(tW  / 2)
   const shX    = cx - Math.floor(shW / 2)
 
-  // ── HEAD (rows 0-27) ──────────────────────────────────────────────────────
+  // ── HEAD (rows 0-31) — 32 rows captures beard / chin area ─────────────────
   for (let r = 0; r < HR; r++)
     for (let c = 0; c < SW; c++)
       if (pixels[r * SW + c] === '1') set(c, r, true)
 
-  // ── SHOULDER TAPER (rows 28-30): 4-row lerp shoulder→torso ───────────────
+  // ── SHOULDER TAPER (rows 32-35): 4-row lerp shoulder→torso ──────────────
   // Gives a natural trapezoid silhouette instead of a rectangle
   for (let si = 0; si < 4; si++) {
     const t  = si / 3
@@ -822,7 +822,7 @@ function EngineInner() {
                 <hr style={{ border:'none', borderTop:'1px solid var(--line-soft)', margin:'.9rem 0' }} />
                 <span style={S.lbl}>Sprite Sheet Preview</span>
                 <div style={{ fontSize:'.55rem', color:'var(--ink-muted)', marginBottom:'.5rem', lineHeight:1.7 }}>
-                  8 frames · 2 rows × 4 cols · {SW}×{SH}px each · 1px gutters · Unity / Godot ready
+                  8 frames · 2 rows × 4 cols · {SW}×{SH}px each · 1px gutters · Unity&nbsp;/&nbsp;Godot ready
                 </div>
                 <div style={{ background:'#e3e5e4', border:'1px solid var(--line)', padding:4, display:'inline-block', maxWidth:'100%', overflow:'hidden' }}>
                   <canvas
