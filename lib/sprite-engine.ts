@@ -142,7 +142,6 @@ export function drawNormie(
 
   const normType  = tv(traits, 'type')
   const age       = tv(traits, 'age')
-  const gender    = tv(traits, 'gender')
   const facial    = tv(traits, 'facial feature')
   const hair      = tv(traits, 'hair style')
   const eyes      = tv(traits, 'eyes')
@@ -154,16 +153,25 @@ export function drawNormie(
   const isZombie = normType === 'zombie'
   const isOld    = age.includes('old')
   const isYoung  = age.includes('young')
-  const isFemale = gender.includes('female')
   const hasBeard = facial.includes('beard') || facial.includes('mustache') || facial.includes('goatee')
   const isAngry  = expr.includes('angry') || expr.includes('serious')
   const cx       = Math.floor(SW / 2)   // 20
 
-  // ── Body proportions ──────────────────────────────────────────────────────
+  // ── Measure head base width (bottom 4 rows) ──────────────────────────────
+  let headBaseW = 0
+  for (let r = HR - 4; r < HR; r++) {
+    let minX = SW, maxX = -1
+    for (let c = 0; c < SW; c++) {
+      if (pixels[r * SW + c] === '1') { if (c < minX) minX = c; if (c > maxX) maxX = c }
+    }
+    if (maxX >= minX) headBaseW = Math.max(headBaseW, maxX - minX + 1)
+  }
+
+  // ── Body proportions (unified — no gender differentiation) ────────────────
   const buildLvl = s2 % 3   // 0=slim  1=medium  2=stocky
-  const baseTW   = isAlien ? 8 : isFemale ? 8 : isYoung ? 9 : isCat ? 10 : 10
-  const tW       = baseTW + buildLvl      // 8–12 px
-  const shW      = tW + (isFemale ? 2 : 4)  // shoulder width
+  const baseTW   = isAlien ? 10 : isYoung ? 10 : isCat ? 11 : 12
+  const tW       = baseTW + buildLvl      // 10–14 px
+  const shW      = Math.max(tW + 4, Math.min(headBaseW, 24))
   const tX       = cx - Math.floor(tW  / 2)
   const shX      = cx - Math.floor(shW / 2)
 
@@ -172,22 +180,20 @@ export function drawNormie(
     for (let c = 0; c < SW; c++)
       if (pixels[r * SW + c] === '1') set(c, r, true)
 
-  // ── SHOULDER (2 rows): quick blend from shW → tW ─────────────────────────
-  for (let si = 0; si < 2; si++) {
-    const t  = si  // 0 → full shW, 1 → tW
+  // ── SHOULDER (3 rows): smooth blend from shW → tW ────────────────────────
+  for (let si = 0; si < 3; si++) {
+    const t  = si / 2   // 0 → shW, 0.5 → mid, 1 → tW
     const w  = Math.round(shW * (1 - t) + tW * t)
     const x0 = cx - Math.floor(w / 2)
     for (let x = x0; x < x0 + w; x++) set(x, HR + si, true)
   }
 
   // ── TORSO ──────────────────────────────────────────────────────────────────
-  const tY = HR + 2   // right after 2-row shoulder
+  const tY = HR + 3   // right after 3-row shoulder
   const tH = 10 - cfg.torsoSquash  // compact solid block
 
   for (let y = 0; y < tH; y++) {
-    // Females: subtle 1px waist inset in mid-rows
-    const inset = (isFemale && y >= 3 && y <= tH - 2) ? 1 : 0
-    for (let x = tX + inset; x < tX + tW - inset; x++) set(x, tY + y, true)
+    for (let x = tX; x < tX + tW; x++) set(x, tY + y, true)
   }
 
   // ── CLOTHING ──────────────────────────────────────────────────────────────
@@ -253,9 +259,9 @@ export function drawNormie(
   set(cx-1, tY+tH-1, false); set(cx, tY+tH-1, false)
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armW  = 2
+  const armW  = 3
   const armH  = isYoung ? 6 : 8
-  const handW = 2
+  const handW = 3
   const handH = 2
   // Arms flush against shoulder edge — attached to body
   const lArmX = shX
@@ -285,7 +291,7 @@ export function drawNormie(
 
   // ── LEGS ──────────────────────────────────────────────────────────────────
   const legW       = 3
-  const legGap     = isFemale ? 2 : 3
+  const legGap     = 3
   const lLegX      = cx - Math.floor((legW * 2 + legGap) / 2)
   const rLegX      = lLegX + legW + legGap
   const legY0      = hipY + 1
