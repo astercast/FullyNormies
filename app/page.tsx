@@ -151,7 +151,7 @@ function HeroStrip() {
 
 export default function Home() {
   const features = [
-    { n: '01', title: 'Trait-aware bodies',     body: 'Reads on-chain metadata. Human, Cat, Alien, Robot, Ape, Zombie, Skeleton — each type with unique proportions, fur, panels, and extras.' },
+    { n: '01', title: 'Trait-aware bodies',     body: 'Reads on-chain metadata. All 4 types — Human, Cat, Alien, Agent — each get distinct proportions, clothing, and extras.' },
     { n: '02', title: 'Real face compositing',  body: 'Your Normie\'s actual 40×40 face is pixel-sampled and composited onto the body. Every sunglass, beard, and mask preserved exactly.' },
     { n: '03', title: 'Strict 2-color palette', body: 'Every pixel snapped to #e3e5e4 / #48494b via Bayer dithering. No gradients, no blur — pure Normies-style monochrome.' },
     { n: '04', title: '4-pose sprite sheets',   body: 'Generate Idle, Walk, Attack, and Crouch in one click. Export as a game-ready 480×120 sprite sheet.' },
@@ -187,8 +187,8 @@ export default function Home() {
                   <div style={{ opacity: 0.18 }}>SPRITES.</div>
                 </div>
 
-                <p style={{ fontSize: 'clamp(.65rem,1.6vw,.9rem)', color: 'var(--ink-mid)', lineHeight: 1.8, marginBottom: 'clamp(1.4rem,3.5vw,2.5rem)' }}>
-                  Turn any Normie NFT into a full-body 120×120 pixel art game sprite. 4 poses, Bayer dithering, trait-aware bodies. Pure browser engine.
+                <p style={{ fontSize: 'clamp(.75rem,1.8vw,1rem)', color: 'var(--ink-mid)', lineHeight: 1.8, marginBottom: 'clamp(1.4rem,3.5vw,2.5rem)' }}>
+                  Turn any Normie NFT into a full-body 120×120 pixel art game sprite.
                 </p>
 
                 <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap' }}>
