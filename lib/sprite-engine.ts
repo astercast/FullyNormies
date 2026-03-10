@@ -12,7 +12,7 @@ export const SW  = 40   // sprite width  (matches Normie head width)
 export const SH  = 80   // sprite height (30 head + 50 body)
 export const HR  = 30   // head rows (extra 2 rows for beards/chins)
 export const SCL = 5    // display upscale  (40×80 → 200×400)
-export const NORMAL_LEG_H = 14
+export const NORMAL_LEG_H = 11
 
 // -- Types --------------------------------------------------------------------
 export interface TraitAttr { trait_type: string; value: string }
@@ -35,7 +35,7 @@ export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', crouc
 export const POSE_CFG: Record<Pose, PoseCfg> = {
   idle:   { torsoSquash:0, lArmDx:-1, lArmDy:1,  rArmDx:1,  rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
   walk:   { torsoSquash:0, lArmDx:-4, lArmDy:-2, rArmDx:3,  rArmDy:2,  lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
-  crouch: { torsoSquash:2, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:8 },
+  crouch: { torsoSquash:2, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:6 },
 }
 
 // =============================================================================
@@ -77,10 +77,10 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
   //
   // ── CROUCH  (enter → hold × 2 → rise) ─────────────────────────────────────
   { label: 'Crouch', frames: [
-    { torsoSquash:1, lArmDx:-1, lArmDy: 2, rArmDx: 1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:10 },
-    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx: 2, rArmDy: 3, lLegDx: 0, rLegDx: 0, legH:8  },
-    { torsoSquash:2, lArmDx:-2, lArmDy: 4, rArmDx: 2, rArmDy: 4, lLegDx: 0, rLegDx: 0, legH:8  },
-    { torsoSquash:1, lArmDx:-1, lArmDy: 2, rArmDx: 1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:10 },
+    { torsoSquash:1, lArmDx:-1, lArmDy: 2, rArmDx: 1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:8 },
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx: 2, rArmDy: 3, lLegDx: 0, rLegDx: 0, legH:6 },
+    { torsoSquash:2, lArmDx:-2, lArmDy: 4, rArmDx: 2, rArmDy: 4, lLegDx: 0, rLegDx: 0, legH:6 },
+    { torsoSquash:1, lArmDx:-1, lArmDy: 2, rArmDx: 1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:8 },
   ]},
 ]
 
@@ -169,9 +169,9 @@ export function drawNormie(
 
   // ── Body proportions (unified — no gender differentiation) ────────────────
   const buildLvl = s2 % 3   // 0=slim  1=medium  2=stocky
-  const baseTW   = isAlien ? 10 : isYoung ? 10 : isCat ? 11 : 12
-  const tW       = baseTW + buildLvl      // 10–14 px
-  const shW      = Math.max(tW + 4, Math.min(headBaseW, 24))
+  const baseTW   = isAlien ? 12 : isYoung ? 12 : isCat ? 14 : 14
+  const tW       = baseTW + buildLvl      // 12–16 px
+  const shW      = Math.max(tW + 6, Math.min(headBaseW + 2, 28))
   const tX       = cx - Math.floor(tW  / 2)
   const shX      = cx - Math.floor(shW / 2)
 
@@ -196,67 +196,39 @@ export function drawNormie(
     for (let x = tX; x < tX + tW; x++) set(x, tY + y, true)
   }
 
-  // ── CLOTHING ──────────────────────────────────────────────────────────────
+  // ── CLOTHING (minimal cuts — keeps torso filled in) ────────────────────────
   const rawShirt  = isAgent ? 4 : isZombie ? 5 : isCat ? (s0 % 3) : (s0 % 4)
   const shirtType = rawShirt
 
   if (shirtType === 4) {
-    // Agent suit — placket strip + tie + lapels
-    for (let y = tY; y < tY + tH - 1; y++) { set(cx-1, y, false); set(cx, y, false) }
-    set(cx-1, tY, true); set(cx, tY, true)
-    for (let y = tY+2; y < tY+tH-1; y += 2) set(cx-1, y, true)
-    for (let d = 1; d <= 4; d++) {
-      set(Math.max(tX, tX+d-1), tY+d, false)
-      set(Math.min(tX+tW-1, tX+tW-d), tY+d, false)
-    }
+    // Agent suit — center seam + buttons
+    for (let y = tY + 1; y < tY + tH - 1; y++) set(cx, y, false)
+    for (let y = tY + 2; y < tY + tH - 1; y += 3) set(cx, y, true)
   } else if (shirtType === 5) {
-    // Zombie torn — collar + ragged holes
-    set(cx-1, tY, false); set(cx, tY, false)
-    for (const hy of [2,5,9,12]) if (hy < tH - 1) {
-      set(tX+1, tY+hy, false); set(tX+2, tY+hy, false); set(tX+tW-2, tY+hy, false)
+    // Zombie torn — scattered holes
+    set(cx, tY, false)
+    for (const hy of [3, 6]) if (hy < tH - 1) {
+      set(tX + 1, tY + hy, false); set(tX + tW - 2, tY + hy, false)
     }
-    if (isCat) for (let y = tY+1; y < tY+tH-2; y++) set(cx, y, false)
   } else if (shirtType === 2) {
-    // Hoodie — scoop collar + kangaroo pocket
-    for (let x = cx-3; x <= cx+2; x++) set(x, tY, false)
-    set(cx-2, tY+1, false); set(cx+1, tY+1, false)
-    const pY = tY + 7
-    if (pY + 3 < tY + tH - 1) {
-      for (let x = tX+2; x < tX+tW-2; x++) set(x, pY, false)
-      for (let y = pY+1; y < pY+3; y++) { set(tX+2, y, false); set(tX+tW-3, y, false) }
-    }
-    if (isCat) set(cx, tY+4, false)
+    // Hoodie — small collar
+    set(cx - 1, tY, false); set(cx, tY, false)
   } else if (shirtType === 3) {
-    // Jacket — V collar + lapels + 2 buttons
-    set(cx-1, tY, false); set(cx, tY, false)
-    for (let d = 1; d <= 4; d++) {
-      set(tX + d, tY + d, false)
-      set(tX + tW - 1 - d, tY + d, false)
-    }
-    set(cx, tY + 8,  false)
-    set(cx, tY + 11, false)
-    if (isCat) for (let y = tY+5; y < tY+tH-2; y++) set(cx, y, false)
+    // Jacket — center line + buttons
+    for (let y = tY; y < tY + tH - 1; y++) set(cx, y, false)
+    set(cx, tY + 3, true); set(cx, tY + 6, true)
   } else if (shirtType === 1) {
-    // Striped shirt — V collar + 2 stripes
-    set(cx-1, tY, false); set(cx, tY, false)
-    for (let x = tX+2; x < tX+tW-2; x++) {
-      if (tY+4 < tY+tH-2) set(x, tY+4, false)
-      if (tY+9 < tY+tH-2) set(x, tY+9, false)
-    }
-    if (isCat) for (let y = tY; y < tY+tH-2; y++) set(cx, y, false)
+    // Striped — single stripe
+    const stripeY = tY + Math.floor(tH * 0.6)
+    if (stripeY < tY + tH - 1) for (let x = tX + 1; x < tX + tW - 1; x++) set(x, stripeY, false)
   } else {
-    // Plain shirt — V collar + chest crease
-    const vDepth = isAngry ? 2 : 1
-    for (let d = 0; d < vDepth; d++) {
-      set(cx-1-d, tY+d, false); set(cx+d, tY+d, false)
-    }
-    if (tH > 10) for (let x = tX+2; x < tX+tW-2; x++) set(x, tY+6, false)
-    if (isCat) for (let y = tY; y < tY+tH-2; y++) set(cx, y, false)
+    // Plain — collar notch
+    set(cx, tY, false)
   }
 
   // Belt
-  for (let x = tX-1; x <= tX+tW; x++) set(x, tY+tH-1, true)
-  set(cx-1, tY+tH-1, false); set(cx, tY+tH-1, false)
+  for (let x = tX - 1; x <= tX + tW; x++) set(x, tY + tH - 1, true)
+  set(cx, tY + tH - 1, false)
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
   const armW  = 3
@@ -285,36 +257,43 @@ export function drawNormie(
   fillArm(lArmX, cfg.lArmDx, cfg.lArmDy)
   fillArm(rArmX, cfg.rArmDx, cfg.rArmDy)
 
-  // ── HIP LINE ──────────────────────────────────────────────────────────────
-  const hipY = tY + tH
-  for (let x = tX-1; x <= tX+tW; x++) set(x, hipY, true)
+  // ── HIP / PELVIS (2 rows) ─────────────────────────────────────────────────
+  const hipY       = tY + tH
+  const legW       = 4
+  const legGap     = 2
+  const legSpan    = legW * 2 + legGap   // 10px
+  // Hip line
+  for (let x = tX - 1; x <= tX + tW; x++) set(x, hipY, true)
+  // Pelvis bridge — smooth transition from torso to leg width
+  const pelvisW = Math.max(legSpan + 2, tW)
+  const pelvisX = cx - Math.floor(pelvisW / 2)
+  for (let x = pelvisX; x < pelvisX + pelvisW; x++) set(x, hipY + 1, true)
 
   // ── LEGS ──────────────────────────────────────────────────────────────────
-  const legW       = 3
-  const legGap     = 3
-  const lLegX      = cx - Math.floor((legW * 2 + legGap) / 2)
+  const lLegX      = cx - Math.floor(legSpan / 2)
   const rLegX      = lLegX + legW + legGap
-  const legY0      = hipY + 1
+  const legY0      = hipY + 2
   const pantsDetail = s1 % 4   // 0=plain 1=center-seam 2=side-pocket 3=cuffed
+
+  // Crotch fill — first 2 rows between legs for smooth pelvis→leg transition
+  for (let s = 0; s < 2; s++)
+    for (let x = lLegX + legW; x < rLegX; x++) set(x, legY0 + s, true)
 
   function fillLeg(baseX: number, drift: number, lh: number) {
     for (let s = 0; s < lh; s++) {
       const lx = Math.round(baseX + drift * s / Math.max(lh - 1, 1))
-      // Shin taper: lower 40% of leg is 1px narrower — thigh-to-shin shape
-      const shinRow = Math.floor(lh * 0.6)
-      const lw = (legW >= 4 && s >= shinRow) ? legW - 1 : legW
-      for (let w = 0; w < lw; w++) set(lx + w, legY0 + s, true)
-      if (pantsDetail === 1 && lw >= 3) set(lx + Math.floor(lw/2), legY0+s, false)
-      if (pantsDetail === 2 && s >= 1 && s <= 4) set(lx + lw - 1, legY0+s, false)
-      if (pantsDetail === 3 && s === lh - 1) for (let x = lx; x < lx+lw+1; x++) set(x, legY0+s, true)
+      for (let w = 0; w < legW; w++) set(lx + w, legY0 + s, true)
+      if (pantsDetail === 1) set(lx + Math.floor(legW / 2), legY0 + s, false)
+      if (pantsDetail === 2 && s >= 1 && s <= 3) set(lx + legW - 1, legY0 + s, false)
+      if (pantsDetail === 3 && s === lh - 1) for (let x = lx; x < lx + legW + 1; x++) set(x, legY0 + s, true)
     }
     // Ankle
-    const ankX  = Math.round(baseX + drift)
-    const ankY  = legY0 + lh
+    const ankX = Math.round(baseX + drift)
+    const ankY = legY0 + lh
     for (let w = 0; w < legW; w++) set(ankX + w, ankY, true)
-    // Shoe — 4×2
+    // Shoe — 5×2
     const sX = ankX - 1; const sY = ankY + 1
-    for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) set(sX+c, sY+r, true)
+    for (let r = 0; r < 2; r++) for (let c = 0; c < 5; c++) set(sX + c, sY + r, true)
   }
 
   fillLeg(lLegX, cfg.lLegDx, cfg.legH)
