@@ -114,7 +114,7 @@ function EngineInner() {
 
   // Generated canvases per pose (already upscaled)
   const [frames,    setFrames]   = useState<Record<Pose, HTMLCanvasElement|null>>({
-    idle:null, walk:null, sit:null, crouch:null,
+    idle:null, walk:null, crouch:null,
   })
   const [sheet,     setSheet]    = useState<HTMLCanvasElement|null>(null)
   const [activePose, setActivePose] = useState<Pose>('idle')
@@ -137,7 +137,7 @@ function EngineInner() {
     setLoadState('loading'); setLoadErr('')
     setNormName(''); setNormTraits(null); setPixels(null)
     setSavedUrl(null); setCurrentId(id)
-      setFrames({ idle:null, walk:null, sit:null, crouch:null }); setSheet(null)
+      setFrames({ idle:null, walk:null, crouch:null }); setSheet(null)
     router.replace(`/engine?id=${id}`, { scroll:false })
 
     try {
@@ -166,7 +166,7 @@ function EngineInner() {
   // -- Generate 4 reference pose cards + full 16-frame animation sheet -------
   const generateAll = useCallback((pix: string, td: TraitsData, id: number | null) => {
     const newFrames: Record<Pose, HTMLCanvasElement|null> = {
-      idle:null, walk:null, sit:null, crouch:null,
+      idle:null, walk:null, crouch:null,
     }
     POSES.forEach(pose => {
       const native = drawNormie(pix, td, pose, id)
@@ -217,7 +217,7 @@ function EngineInner() {
     out.toBlob(b => {
       const a = Object.assign(document.createElement('a'), {
         href: URL.createObjectURL(b!),
-        download: `normie-${currentId}-anim-${fw}x${fh}-16f${transparent?'-t':''}.png`,
+        download: `normie-${currentId}-anim-${fw}x${fh}-12f${transparent?'-t':''}.png`,
       })
       a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000)
     }, 'image/png')
@@ -256,9 +256,9 @@ function EngineInner() {
     { label: `Frame: ${SW*2}×${SH*2}px`,                action: () => dlFrame(activePose, 2) },
     { label: `Frame: ${SW*4}×${SH*4}px`,                action: () => dlFrame(activePose, 4) },
     { label: `Frame: ${SW*4}×${SH*4}px transparent`,    action: () => dlFrame(activePose, 4, true) },
-    { label: `Sheet: ${SW}px · 4×4 · 16 frames · native`, action: () => dlSheet(1) },
-    { label: `Sheet: ${SW*2}px · 4×4 · 16 frames`,       action: () => dlSheet(2) },
-    { label: `Sheet: ${SW*4}px · 4×4 · 16 frames`,       action: () => dlSheet(4) },
+    { label: `Sheet: ${SW}px · 3×4 · 12 frames · native`, action: () => dlSheet(1) },
+    { label: `Sheet: ${SW*2}px · 3×4 · 12 frames`,       action: () => dlSheet(2) },
+    { label: `Sheet: ${SW*4}px · 3×4 · 12 frames`,       action: () => dlSheet(4) },
     { label: `Sheet: ${SW*4}px · transparent`,           action: () => dlSheet(4, true) },
   ] : []
 
@@ -415,7 +415,7 @@ function EngineInner() {
               )}
               {!hasFrames && (
                 <div style={{ fontSize:'.62rem', color:'var(--ink-muted)', marginBottom:'.7rem', lineHeight:1.9 }}>
-                  {loadState === 'loading' ? 'Generating 8 poses…' : 'Load a Normie above to generate its full body sprites.'}
+                  {loadState === 'loading' ? 'Generating poses…' : 'Load a Normie above to generate its full body sprites.'}
                 </div>
               )}
               {savedUrl && (

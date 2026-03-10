@@ -17,7 +17,7 @@ export const NORMAL_LEG_H = 15
 // -- Types --------------------------------------------------------------------
 export interface TraitAttr { trait_type: string; value: string }
 export interface TraitsData { attributes: TraitAttr[] }
-export type Pose = 'idle' | 'walk' | 'sit' | 'crouch'
+export type Pose = 'idle' | 'walk' | 'crouch'
 
 export interface PoseCfg {
   torsoSquash: number
@@ -25,24 +25,21 @@ export interface PoseCfg {
   rArmDx: number; rArmDy: number
   lLegDx: number; rLegDx: number
   legH: number
-  isSit?: boolean   // when true: chair is drawn, legs hang straight down
 }
 
 // -- Pose data ----------------------------------------------------------------
-export const POSES: Pose[] = ['idle', 'walk', 'sit', 'crouch']
-export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', sit:'Sit', crouch:'Crouch' }
+export const POSES: Pose[] = ['idle', 'walk', 'crouch']
+export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', crouch:'Crouch' }
 
-// Reference poses — used for the 4 display cards
+// Reference poses — used for the 3 display cards
 export const POSE_CFG: Record<Pose, PoseCfg> = {
   idle:   { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
-  walk:   { torsoSquash:0, lArmDx:-1, lArmDy:-5, rArmDx:+1, rArmDy:+3, lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
-  // Sit: isSit flag triggers chair draw in drawNormie; legDx/legH overridden at draw time
-  sit:    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx: 0, rLegDx: 0, legH:9, isSit:true },
-  crouch: { torsoSquash:2, lArmDx:-3, lArmDy:5,  rArmDx:3,  rArmDy:5,  lLegDx: 0, rLegDx: 0, legH:8 },
+  walk:   { torsoSquash:0, lArmDx: 0, lArmDy:-4, rArmDx: 0, rArmDy:+3, lLegDx:-3, rLegDx:+3, legH:NORMAL_LEG_H },
+  crouch: { torsoSquash:2, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx: 0, rLegDx: 0, legH:9 },
 }
 
 // =============================================================================
-//  ANIMATION CLIPS  —  4 clips × 4 keyframes = 16-frame downloadable sheet
+//  ANIMATION CLIPS  —  3 clips × 4 keyframes = 12-frame downloadable sheet
 //
 //  Walk biomechanics: opposite arm & leg swing together.
 //  Character walks RIGHT. Positive leg-drift = foot goes right (forward).
@@ -51,52 +48,38 @@ export const POSE_CFG: Record<Pose, PoseCfg> = {
 // =============================================================================
 export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
   //
-  // ── IDLE  (gentle arm/body sway) ──────────────────────────────────────────
+  // ── IDLE  (gentle breathing sway) ─────────────────────────────────────────
   { label: 'Idle', frames: [
-    { torsoSquash:0, lArmDx:-1, lArmDy:1,  rArmDx:1,  rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H   },
-    { torsoSquash:0, lArmDx:-1, lArmDy:3,  rArmDx:1,  rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H   },
-    { torsoSquash:0, lArmDx:-1, lArmDy:1,  rArmDx:1,  rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H   },
-    { torsoSquash:0, lArmDx:-1, lArmDy:3,  rArmDx:1,  rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H   },
+    { torsoSquash:0, lArmDx:-1, lArmDy:1,  rArmDx:1,  rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+    { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+    { torsoSquash:0, lArmDx:-1, lArmDy:1,  rArmDx:1,  rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+    { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
   ]},
 
   //
   // ── WALK  (4-frame stride cycle) ──────────────────────────────────────────
-  // legGap=4 gives each leg room so they never cross.
-  // Contact frames: small outward drift ±3±4 from each leg's natural base.
-  // Passing frames: drift=0, feet sit exactly under each hip. legH-1 = bent knee.
-  // Arms: swing purely in Y (Dy) so they don't clip the torso silhouette.
+  //  Arms: Dx=0 so arms don't float away from the torso silhouette. Dy swings
+  //  from –4 (arm up/back) to +3 (arm down/forward). Opposite arm↔leg pairing.
+  //  Legs: modest ±3 drift — never cross center. Passing frames: drift=0,
+  //  legH-1 = very slight knee bend.
   { label: 'Walk', frames: [
-    // F1 — right contact: R foot fwd (+4), L foot back (-3). L arm raises (opp. leg).
-    { torsoSquash:0, lArmDx:-1, lArmDy:-5, rArmDx:+1, rArmDy:+4, lLegDx:-3, rLegDx:+4, legH:NORMAL_LEG_H   },
-    // F2 — passing: both feet under hips, slight knee bend, arms relaxed.
-    { torsoSquash:0, lArmDx:-1, lArmDy: 2, rArmDx:+1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
-    // F3 — left contact: L foot fwd (+3), R foot back (-4). R arm raises.
-    { torsoSquash:0, lArmDx:-1, lArmDy:+4, rArmDx:+1, rArmDy:-5, lLegDx:+3, rLegDx:-4, legH:NORMAL_LEG_H   },
-    // F4 — passing: same as F2.
-    { torsoSquash:0, lArmDx:-1, lArmDy: 2, rArmDx:+1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
+    // F1 — right contact: R foot forward, L foot back
+    { torsoSquash:0, lArmDx:0, lArmDy:-4, rArmDx:0, rArmDy:+3, lLegDx:-3, rLegDx:+3, legH:NORMAL_LEG_H   },
+    // F2 — passing: feet under hips, slight knee bend
+    { torsoSquash:0, lArmDx:0, lArmDy: 1, rArmDx:0, rArmDy: 1, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
+    // F3 — left contact: L foot forward, R foot back
+    { torsoSquash:0, lArmDx:0, lArmDy:+3, rArmDx:0, rArmDy:-4, lLegDx:+3, rLegDx:-3, legH:NORMAL_LEG_H   },
+    // F4 — passing: same as F2
+    { torsoSquash:0, lArmDx:0, lArmDy: 1, rArmDx:0, rArmDy: 1, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
   ]},
 
   //
-  // ── SIT  (seated idle, chair drawn by drawNormie when isSit=true) ─────────
-  // Arms give a subtle breathing sway. Legs are overridden to hang straight down.
-  { label: 'Sit', frames: [
-    { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx:0, rLegDx:0, legH:9, isSit:true },
-    { torsoSquash:0, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx:0, rLegDx:0, legH:9, isSit:true },
-    { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx:0, rLegDx:0, legH:9, isSit:true },
-    { torsoSquash:0, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx:0, rLegDx:0, legH:9, isSit:true },
-  ]},
-
-  //
-  // ── CROUCH  (enter → full crouch × 2 → rise) ─────────────────────────────
+  // ── CROUCH  (enter → hold × 2 → rise) ─────────────────────────────────────
   { label: 'Crouch', frames: [
-    // F1 entering: lower body, feet stay under
-    { torsoSquash:0, lArmDx:-2, lArmDy: 3, rArmDx: 2, rArmDy: 3, lLegDx:-1, rLegDx:+1, legH:11 },
-    // F2 full crouch: squat low, feet directly under body (no splay)
-    { torsoSquash:2, lArmDx:-3, lArmDy: 5, rArmDx: 3, rArmDy: 5, lLegDx: 0, rLegDx: 0, legH:8  },
-    // F3 hold: small arm shift to look alive
-    { torsoSquash:2, lArmDx:-2, lArmDy: 6, rArmDx: 2, rArmDy: 6, lLegDx: 0, rLegDx: 0, legH:8  },
-    // F4 rising: mirror of entering
-    { torsoSquash:0, lArmDx:-2, lArmDy: 3, rArmDx: 2, rArmDy: 3, lLegDx:-1, rLegDx:+1, legH:11 },
+    { torsoSquash:1, lArmDx:-1, lArmDy: 3, rArmDx: 1, rArmDy: 3, lLegDx: 0, rLegDx: 0, legH:11 },
+    { torsoSquash:2, lArmDx:-2, lArmDy: 4, rArmDx: 2, rArmDy: 4, lLegDx: 0, rLegDx: 0, legH:9  },
+    { torsoSquash:2, lArmDx:-2, lArmDy: 5, rArmDx: 2, rArmDy: 5, lLegDx: 0, rLegDx: 0, legH:9  },
+    { torsoSquash:1, lArmDx:-1, lArmDy: 3, rArmDx: 1, rArmDy: 3, lLegDx: 0, rLegDx: 0, legH:11 },
   ]},
 ]
 
@@ -177,13 +160,12 @@ export function drawNormie(
 
   // ── Body proportions ──────────────────────────────────────────────────────
   const buildLvl = s2 % 3   // 0=slim  1=medium  2=stocky
-  // Base torso: each type has a natural width, build adds 0-2px on top
-  const baseTW   = isAlien ? 6 : isCat ? 8 : isFemale ? 7 : isYoung ? 8 : isOld ? 9 : 10
-  const tW       = baseTW + buildLvl   // 6–12 depending on type & build
-  // Shoulder flare: for males, slim build gets the widest V-taper (lean look),
-  // stocky build gets minimal flare (barrel-chest look). shW stays ~14 for all.
-  const shFlare  = isFemale || isAlien ? 2 : Math.max(4 - buildLvl, 2)
-  const shW      = tW + shFlare
+  // Torso width — lean characters are narrower, stocky ones wider.
+  // Female 8-10, male 10-12, alien 7-9, young 9-11.
+  const baseTW   = isAlien ? 7 : isFemale ? 8 : isYoung ? 9 : 10
+  const tW       = baseTW + buildLvl
+  // Shoulder = torso + 2 each side. Just enough to read as shoulders.
+  const shW      = tW + 4
   const tX       = cx - Math.floor(tW  / 2)
   const shX      = cx - Math.floor(shW / 2)
 
@@ -192,22 +174,30 @@ export function drawNormie(
     for (let c = 0; c < SW; c++)
       if (pixels[r * SW + c] === '1') set(c, r, true)
 
-  // ── SHOULDER TAPER (rows 28-30): 3-row sharp taper shoulder→torso ─────────
-  // Fewer rows = snappier join, less rectangular trapezoid look
+  // ── NECK (1 row) ──────────────────────────────────────────────────────────
+  // Narrow 4px neck gives a natural head→body separation instead of a flat join
+  const neckW = Math.min(tW - 2, 6)
+  const neckX = cx - Math.floor(neckW / 2)
+  for (let x = neckX; x < neckX + neckW; x++) set(x, HR, true)
+
+  // ── SHOULDER TAPER (rows 29-31): 3 rows lerp shoulder→torso ───────────────
   for (let si = 0; si < 3; si++) {
     const t  = si / 2             // 0, 0.5, 1
     const w  = Math.round(shW * (1 - t) + tW * t)
     const x0 = cx - Math.floor(w / 2)
-    for (let x = x0; x < x0 + w; x++) set(x, HR + si, true)
+    for (let x = x0; x < x0 + w; x++) set(x, HR + 1 + si, true)
   }
 
   // ── TORSO ──────────────────────────────────────────────────────────────────
-  const tY = HR + 3   // starts right after 3-row shoulder taper
-  const tH = 13 - cfg.torsoSquash  // fills 72-row canvas better
+  const tY = HR + 4   // starts right after neck + 3-row shoulder taper
+  const tH = 11 - cfg.torsoSquash  // compact torso — long legs look better
 
   for (let y = 0; y < tH; y++) {
-    // Females only: 1px waist inset at mid-torso so they read clearly feminine
-    const inset = (isFemale && y >= 4 && y <= 7) ? 1 : 0
+    // Mid-torso taper: everyone narrows 1px mid-torso (natural trunk shape).
+    // Females get an extra 1px inset for waist.
+    const midTaper = (y >= 3 && y <= tH - 3) ? 1 : 0
+    const femInset = (isFemale && y >= 4 && y <= tH - 2) ? 1 : 0
+    const inset = midTaper + femInset
     for (let x = tX + inset; x < tX + tW - inset; x++) set(x, tY + y, true)
   }
 
@@ -274,23 +264,25 @@ export function drawNormie(
   set(cx-1, tY+tH-1, false); set(cx, tY+tH-1, false)
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armW  = isYoung ? 2 : 2 + Math.min(buildLvl, 1)   // slim=2, med/stocky=3
-  const armH  = isYoung ? 7 : 9   // longer to match taller legs
-  const handW = armW + 1
-  const handH = 2   // compact hand
-  // Arms flush at shoulder edges — no gap so they attach cleanly to the body
-  const lArmX = shX
-  const rArmX = shX + shW - armW
-  const armY0 = HR     // arms attach at the first shoulder row
+  const armW  = 2 + Math.min(buildLvl, 1)   // slim=2, med/stocky=3
+  const armH  = isYoung ? 7 : 8
+  const handW = Math.min(armW + 1, 3)
+  const handH = 2
+  // Arms start 1px outside shoulder edge — natural gap so they read as separate limbs
+  const lArmX = shX - 1
+  const rArmX = shX + shW - armW + 1
+  const armY0 = HR + 1   // attach at 1st shoulder-taper row (below neck)
 
   function fillArm(rootX: number, dx: number, dy: number) {
     for (let s = 0; s < armH; s++) {
       const t  = s / (armH - 1)
       const ax = rootX + Math.round(dx * t)
       const ay = armY0 + s + Math.round(dy * t)
-      const aw = (armW >= 3 && s >= Math.floor(armH * 0.55)) ? armW - 1 : armW
+      // Forearm taper: bottom 40% narrows by 1px for armW≥3
+      const aw = (armW >= 3 && s >= armH - 3) ? armW - 1 : armW
       for (let w = 0; w < aw; w++) set(ax + w, ay, true)
     }
+    // Hand — slight offset to center on forearm tip
     const hx = rootX + Math.round(dx)
     const hy = armY0 + armH + Math.round(dy)
     for (let hy2 = 0; hy2 < handH; hy2++)
@@ -305,8 +297,8 @@ export function drawNormie(
   for (let x = tX-1; x <= tX+tW; x++) set(x, hipY, true)
 
   // ── LEGS ──────────────────────────────────────────────────────────────────
-  const legW       = 3 + buildLvl   // 3=slim 4=med 5=stocky — matches body mass
-  const legGap     = 4   // natural stance: each leg stays on its own side during walk
+  const legW       = 3   // uniform leg width — clean silhouette at any build
+  const legGap     = isFemale ? 2 : 4   // females: narrower hip stance; males: wider
   const lLegX      = cx - Math.floor((legW * 2 + legGap) / 2)
   const rLegX      = lLegX + legW + legGap
   const legY0      = hipY + 1
@@ -323,37 +315,20 @@ export function drawNormie(
       if (pantsDetail === 2 && s >= 1 && s <= 4) set(lx + lw - 1, legY0+s, false)
       if (pantsDetail === 3 && s === lh - 1) for (let x = lx; x < lx+lw+1; x++) set(x, legY0+s, true)
     }
+    // Ankle — 1-row transition
     const ankX  = Math.round(baseX + drift)
     const ankY  = legY0 + lh
-    set(ankX, ankY, true); set(ankX+1, ankY, true); set(ankX+2, ankY, true)
-    const shoeW = s3 % 3 === 2 ? 7 : 6
+    for (let w = 0; w < legW; w++) set(ankX + w, ankY, true)
+    // Shoe — compact 5×2 block
+    const shoeW = 5
     const sX = ankX - 1; const sY = ankY + 1
-    for (let r = 0; r < 3; r++) for (let c = 0; c < shoeW; c++) set(sX+c, sY+r, true)
-    set(sX+1, sY, false); set(sX+2, sY, false)
-    if (s3 % 3 === 1) { set(sX+shoeW-1, sY, false); set(sX+shoeW-1, sY+1, false) }
+    for (let r = 0; r < 2; r++) for (let c = 0; c < shoeW; c++) set(sX+c, sY+r, true)
+    // Toe cap highlight on top row
     set(sX, sY, false)
   }
 
-  const isSitting = (cfg as any).isSit === true
-  if (isSitting) {
-    // Chair: seat bar extends wider than torso on each side, plus two vertical posts
-    const seatX = tX - 4
-    const seatW = tW + 8
-    // Seat horizontal plank — drawn before legs so legs appear in front
-    for (let y = legY0; y < legY0 + 3; y++)
-      for (let x = seatX; x < seatX + seatW; x++) set(x, y, true)
-    // Chair legs: 2px posts from below seat to near canvas bottom
-    for (let y = legY0 + 3; y < SH - 3; y++) {
-      set(seatX,             y, true); set(seatX + 1,           y, true)
-      set(seatX + seatW - 2, y, true); set(seatX + seatW - 1,   y, true)
-    }
-    // Character's legs hang straight down (short — thighs visible above seat)
-    fillLeg(lLegX, 0, 9)
-    fillLeg(rLegX, 0, 9)
-  } else {
-    fillLeg(lLegX, cfg.lLegDx, cfg.legH)
-    fillLeg(rLegX, cfg.rLegDx, cfg.legH)
-  }
+  fillLeg(lLegX, cfg.lLegDx, cfg.legH)
+  fillLeg(rLegX, cfg.rLegDx, cfg.legH)
 
   flush()
   return canvas
@@ -371,7 +346,7 @@ export function upscale(src: HTMLCanvasElement, scale: number): HTMLCanvasElemen
 }
 
 // -- Animation sheet ----------------------------------------------------------
-// 16-frame sheet: 4 clips × 4 keyframes, each row = one animation.
+// 12-frame sheet: 3 clips × 4 keyframes, each row = one animation.
 export function makeAnimSheet(
   pix: string,
   traits: TraitsData,
