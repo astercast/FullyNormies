@@ -12,6 +12,62 @@ const POSE_PROMPTS: Record<string, string> = {
   crouch: 'crouching pose, knees deeply bent, body low, arms forward for balance',
 }
 
+const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504])
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+async function callFal(payload: Record<string, unknown>) {
+  const maxAttempts = 3
+  let lastStatus = 0
+  let lastText = ''
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 35000)
+
+    try {
+      const res = await fetch('https://fal.run/fal-ai/flux-lora', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Key ${FAL_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      })
+
+      clearTimeout(timeout)
+      if (res.ok) {
+        const data = await res.json()
+        const url = data.images?.[0]?.url ?? null
+        if (url) return { ok: true as const, url }
+        lastStatus = 502
+        lastText = 'fal.ai returned success without image URL'
+      } else {
+        const text = await res.text().catch(() => '')
+        lastStatus = res.status
+        lastText = text.slice(0, 300)
+        if (!RETRYABLE_STATUS.has(res.status) || attempt === maxAttempts) {
+          return { ok: false as const, status: res.status, text: lastText }
+        }
+      }
+    } catch (err: unknown) {
+      clearTimeout(timeout)
+      lastStatus = 599
+      const msg = err instanceof Error ? err.message : 'Network error'
+      const isAbort = err instanceof Error && err.name === 'AbortError'
+      lastText = isAbort ? 'Request timed out' : msg
+      if (attempt === maxAttempts) {
+        return { ok: false as const, status: lastStatus, text: lastText }
+      }
+    }
+
+    await sleep(500 * attempt)
+  }
+
+  return { ok: false as const, status: lastStatus || 500, text: lastText || 'Unknown fal.ai error' }
+}
+
 export const maxDuration = 60  // Vercel: allow up to 60s for parallel AI calls
 
 export async function POST(req: NextRequest) {
@@ -23,7 +79,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}))
-  const { normieImageUrl, normieId, traits = [], poses = ['idle','walk','attack','crouch'], seed } = body
+  const { normieImageUrl, traits = [], poses = ['idle','walk','attack','crouch'], seed } = body
 
   if (!normieImageUrl) {
     return NextResponse.json({ error: 'normieImageUrl is required' }, { status: 400 })
@@ -31,14 +87,12 @@ export async function POST(req: NextRequest) {
 
   // Build character description from traits
   const tv = (key: string) =>
-    (traits.find((t: any) => t.key?.toLowerCase() === key.toLowerCase())?.value ?? '').toLowerCase()
+    (traits.find((t: { key?: string; value?: string }) => t.key?.toLowerCase() === key.toLowerCase())?.value ?? '').toLowerCase()
 
   const normType  = tv('type')
   const gender    = tv('gender')
   const age       = tv('age')
   const hairStyle = tv('hair style')
-  const facialFeat= tv('facial feature')
-  const eyes      = tv('eyes')
   const accessory = tv('accessory')
 
   const typeDesc =
@@ -96,25 +150,16 @@ export async function POST(req: NextRequest) {
           payload.ip_adapter_scale = 0.55
         }
 
-        const res = await fetch('https://fal.run/fal-ai/flux-lora', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Key ${FAL_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        })
-
-        if (res.ok) {
-          const data = await res.json()
-          const url = data.images?.[0]?.url ?? null
-          if (url) return { pose, url }
+        const result = await callFal(payload)
+        if (result.ok && result.url) {
+          return { pose, url: result.url }
         }
 
         // If IP-adapter caused a 422 or error, try without
-        const text = await res.text().catch(() => '')
+        const text = result.ok ? '' : result.text
+        const status = result.ok ? 500 : result.status
         if (!withIPAdapter) {
-          throw new Error(`fal.ai error (${res.status}): ${text.slice(0, 200)}`)
+          throw new Error(`fal.ai error (${status}): ${(text || '').slice(0, 200)}`)
         }
         // else loop again without IP adapter
       }

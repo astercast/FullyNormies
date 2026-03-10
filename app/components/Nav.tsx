@@ -5,19 +5,21 @@ import { useEffect, useState } from 'react'
 
 export default function Nav() {
   const path = usePathname()
-  const [theme, setTheme] = useState<'light'|'dark'>('light')
+  const [theme, setTheme] = useState<'light'|'dark'>(() => {
+    if (typeof window === 'undefined') return 'light'
+    const saved = localStorage.getItem('fn_theme')
+    if (saved === 'light' || saved === 'dark') return saved
+    return window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'
+  })
 
   useEffect(() => {
-    const t = (localStorage.getItem('fn_theme') ||
-      (window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light')) as 'light'|'dark'
-    setTheme(t)
-  }, [])
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('fn_theme', theme)
+  }, [theme])
 
   function toggle() {
     const next = theme === 'dark' ? 'light' : 'dark'
     setTheme(next)
-    document.documentElement.setAttribute('data-theme', next)
-    localStorage.setItem('fn_theme', next)
   }
 
   const tabs = [

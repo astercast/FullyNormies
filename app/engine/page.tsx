@@ -30,6 +30,11 @@ const POSES: Pose[]     = ['idle','walk','attack','crouch']
 const POSE_LABEL        = { idle:'Idle', walk:'Walk', attack:'Attack', crouch:'Crouch' }
 
 interface Trait { key:string; value:string }
+type FaceGrid = Uint8Array
+
+function toErrorMessage(err: unknown, fallback: string) {
+  return err instanceof Error ? err.message : fallback
+}
 
 // ── Palette snap ───────────────────────────────────────────────
 //  Loads a remote image URL → draws 120×120 → snaps every pixel to 2-color
@@ -59,6 +64,53 @@ function snapToPalette(url: string, contrastBias = 0): Promise<HTMLCanvasElement
     img.onerror = () => reject(new Error(`Failed to load image: ${url}`))
     img.src = url
   })
+}
+
+// Preserve the exact 40x40 Normie head by resampling it once and pasting it onto each pose.
+function sampleFaceGrid(url: string): Promise<FaceGrid> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      c.width = 40
+      c.height = 40
+      const ctx = c.getContext('2d')!
+      ctx.imageSmoothingEnabled = false
+      ctx.drawImage(img, 0, 0, 40, 40)
+
+      const p = ctx.getImageData(0, 0, 40, 40).data
+      const grid = new Uint8Array(40 * 40)
+      for (let i = 0; i < grid.length; i++) {
+        const pi = i * 4
+        if (p[pi + 3] < 40) {
+          grid[i] = 0
+          continue
+        }
+        const lm = 0.2126 * p[pi] + 0.7152 * p[pi + 1] + 0.0722 * p[pi + 2]
+        grid[i] = lm < 140 ? 1 : 0
+      }
+      resolve(grid)
+    }
+    img.onerror = () => reject(new Error(`Failed to sample face from image: ${url}`))
+    img.src = url
+  })
+}
+
+function pasteFaceGrid(canvas: HTMLCanvasElement, faceGrid: FaceGrid) {
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  const id = ctx.getImageData(40, 2, 40, 40)
+  const p = id.data
+  for (let i = 0; i < faceGrid.length; i++) {
+    const pi = i * 4
+    const v = faceGrid[i] === 1 ? PD_V : PL_V
+    p[pi] = v[0]
+    p[pi + 1] = v[1]
+    p[pi + 2] = v[2]
+    p[pi + 3] = 255
+  }
+  ctx.putImageData(id, 40, 2)
 }
 
 // ── Build 480×120 sprite sheet from 4 pose canvases ───────────
@@ -168,6 +220,7 @@ function EngineInner() {
   const [traits,      setTraits]      = useState<Trait[]>([])
   const [faceUrl,     setFaceUrl]     = useState<string|null>(null)     // blob for display
   const [faceApiUrl,  setFaceApiUrl]  = useState<string|null>(null)     // direct url for fal
+  const [faceGrid,    setFaceGrid]    = useState<FaceGrid|null>(null)
 
   // Generation
   type GenState = 'idle'|'calling'|'snapping'|'done'|'error'
@@ -208,7 +261,7 @@ function EngineInner() {
   async function loadById(id: number) {
     if (isNaN(id) || id < 0 || id > 9999) return
     setLoadState('loading'); setLoadErr('')
-    setTraits([]); setNormName(''); setFaceUrl(null); setFaceApiUrl(null)
+    setTraits([]); setNormName(''); setFaceUrl(null); setFaceApiUrl(null); setFaceGrid(null)
     setSavedUrl(null); setCurrentId(id); setGenState('idle')
     setFrames({ idle:null, walk:null, attack:null, crouch:null }); setSheet(null)
     rawUrls.current = { idle:null, walk:null, attack:null, crouch:null }
@@ -221,7 +274,7 @@ function EngineInner() {
       const mData = await mRes.json()
       const parsed: Trait[] = []
       if (Array.isArray(mData.attributes))
-        mData.attributes.forEach((a:any) => {
+        mData.attributes.forEach((a: Record<string, unknown>) => {
           if (a.trait_type && a.value != null)
             parsed.push({ key:String(a.trait_type), value:String(a.value) })
         })
@@ -234,11 +287,14 @@ function EngineInner() {
       const imgRes = await fetch(imgUrl, { cache:'no-store' })
       if (imgRes.ok) {
         const blob = await imgRes.blob()
-        setFaceUrl(URL.createObjectURL(blob))
+        const objectUrl = URL.createObjectURL(blob)
+        setFaceUrl(objectUrl)
+        const sampled = await sampleFaceGrid(objectUrl).catch(() => null)
+        setFaceGrid(sampled)
       }
       setLoadState('done')
-    } catch(e:any) {
-      setLoadErr(e.message || 'Failed to load')
+    } catch(e: unknown) {
+      setLoadErr(toErrorMessage(e, 'Failed to load'))
       setLoadState('error')
     }
   }
@@ -253,7 +309,6 @@ function EngineInner() {
     if (opts.newSeed || seed === null) setSeed(s)
 
     setGenState('calling'); setGenErr(''); setGenProgress(10)
-    setFrames({ idle:null, walk:null, attack:null, crouch:null }); setSheet(null)
     setSavedUrl(null)
     rawUrls.current = { idle:null, walk:null, attack:null, crouch:null }
 
@@ -277,7 +332,14 @@ function EngineInner() {
 
       clearInterval(ticker)
       const data = await res.json()
-      if (!res.ok || data.error) throw new Error(data.error || 'Generation failed')
+      if (!res.ok || data.error) {
+        const detailText = Array.isArray(data?.details)
+          ? data.details
+              .map((d: Record<string, unknown>) => `${String(d.pose ?? 'unknown')}: ${String(d.error ?? 'failed')}`)
+              .join(' | ')
+          : ''
+        throw new Error(detailText ? `${data.error || 'Generation failed'}. ${detailText}` : (data.error || 'Generation failed'))
+      }
 
       // Store raw URLs for re-snapping
       data.poses.forEach((p:{pose:string;url:string|null}) => {
@@ -288,10 +350,10 @@ function EngineInner() {
       setGenState('snapping'); setGenProgress(88)
       await applySnap(contrast)
 
-    } catch(e:any) {
+    } catch(e: unknown) {
       clearInterval(ticker)
       console.error('[generate]', e)
-      setGenErr(e.message || 'Generation failed')
+      setGenErr(toErrorMessage(e, 'Generation failed'))
       setGenState('error')
       setGenProgress(0)
     }
@@ -311,6 +373,9 @@ function EngineInner() {
       if (!url) return
       try {
         newFrames[pose] = await snapToPalette(url, cBias)
+        if (newFrames[pose] && faceGrid) {
+          pasteFaceGrid(newFrames[pose], faceGrid)
+        }
       } catch(e) {
         console.error(`snap failed for ${pose}:`, e)
       }
