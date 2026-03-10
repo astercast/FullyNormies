@@ -35,8 +35,8 @@ export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', sit:'
 export const POSE_CFG: Record<Pose, PoseCfg> = {
   idle:   { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
   walk:   { torsoSquash:0, lArmDx:-1, lArmDy:-5, rArmDx:+1, rArmDy:+3, lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
-  // Sit: torso upright, legs bent outward (short legH + large outward drift = seated silhouette)
-  sit:    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx:-6, rLegDx:+6, legH:5 },
+  // Sit: legs angled diagonally outward — tall enough drift:height ratio reads as bent knees to the side
+  sit:    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx:-9, rLegDx:+9, legH:10 },
   crouch: { torsoSquash:2, lArmDx:-3, lArmDy:5,  rArmDx:3,  rArmDy:5,  lLegDx: 0, rLegDx: 0, legH:8 },
 }
 
@@ -77,12 +77,12 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
 
   //
   // ── SIT  (gentle idle sway while seated) ─────────────────────────────────
-  // Legs short + drifted outward = seated silhouette. Arms rest at sides with subtle bob.
+  // Legs go diagonally outward: drift ≈ legH creates a clear angled-knee silhouette.
   { label: 'Sit', frames: [
-    { torsoSquash:0, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx:-6, rLegDx:+6, legH:5 },
-    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx:-6, rLegDx:+6, legH:5 },
-    { torsoSquash:0, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx:-6, rLegDx:+6, legH:5 },
-    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx:-6, rLegDx:+6, legH:5 },
+    { torsoSquash:0, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx:-9, rLegDx:+9, legH:10 },
+    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx:-9, rLegDx:+9, legH:10 },
+    { torsoSquash:0, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx:-9, rLegDx:+9, legH:10 },
+    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx:-9, rLegDx:+9, legH:10 },
   ]},
 
   //
@@ -176,11 +176,11 @@ export function drawNormie(
 
   // ── Body proportions ──────────────────────────────────────────────────────
   const buildLvl = s2 % 3   // 0=slim  1=medium  2=stocky
-  // Males: wide flat trunk (12-14px). Females: narrower with pinch (8-10px).
-  const baseTW   = isAlien ? 7 : isFemale ? 8 : isYoung ? 10 : isOld ? 12 : isCat ? 10 : 12
+  // Males: 10px base (proportionate to 28-row head). Females: 8px.
+  const baseTW   = isAlien ? 7 : isFemale ? 8 : isYoung ? 9 : isCat ? 10 : 10
   const tW       = baseTW + buildLvl
-  // Males: +4 shoulder flare (broad); females: +2 (subtle)
-  const shW      = tW + (isFemale || isAlien ? 2 : 4)
+  // Males: +3 shoulder flare; females: +2
+  const shW      = tW + (isFemale || isAlien ? 2 : 3)
   const tX       = cx - Math.floor(tW  / 2)
   const shX      = cx - Math.floor(shW / 2)
 
@@ -189,17 +189,17 @@ export function drawNormie(
     for (let c = 0; c < SW; c++)
       if (pixels[r * SW + c] === '1') set(c, r, true)
 
-  // ── SHOULDER TAPER (rows 28-32): 5-row lerp shoulder→torso ───────────────
-  // Longer taper = gentler slope = less blocky shoulder-to-torso join
-  for (let si = 0; si < 5; si++) {
-    const t  = si / 4
+  // ── SHOULDER TAPER (rows 28-30): 3-row sharp taper shoulder→torso ─────────
+  // Fewer rows = snappier join, less rectangular trapezoid look
+  for (let si = 0; si < 3; si++) {
+    const t  = si / 2             // 0, 0.5, 1
     const w  = Math.round(shW * (1 - t) + tW * t)
     const x0 = cx - Math.floor(w / 2)
     for (let x = x0; x < x0 + w; x++) set(x, HR + si, true)
   }
 
   // ── TORSO ──────────────────────────────────────────────────────────────────
-  const tY = HR + 5   // starts right after 5-row shoulder taper
+  const tY = HR + 3   // starts right after 3-row shoulder taper
   const tH = 12 - cfg.torsoSquash  // shorter torso = better leg:torso ratio
 
   for (let y = 0; y < tH; y++) {
@@ -278,7 +278,7 @@ export function drawNormie(
   // Arms flush at shoulder edges — no gap so they attach cleanly to the body
   const lArmX = shX
   const rArmX = shX + shW - armW
-  const armY0 = HR + 1   // start 1 row into shoulder taper
+  const armY0 = HR     // arms attach at the first shoulder row
 
   function fillArm(rootX: number, dx: number, dy: number) {
     for (let s = 0; s < armH; s++) {
