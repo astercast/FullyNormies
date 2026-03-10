@@ -231,14 +231,14 @@ export function drawNormie(
   set(cx, tY + tH - 1, false)
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armW  = 3
+  const armW  = 2
   const armH  = isYoung ? 6 : 8
-  const handW = 3
+  const handW = 2
   const handH = 2
-  // Arms flush against shoulder edge — attached to body
-  const lArmX = shX
-  const rArmX = shX + shW - armW
-  const armY0 = HR   // attach at first shoulder row
+  // Arms hang from torso edges (not wide shoulder tips)
+  const lArmX = tX - armW
+  const rArmX = tX + tW
+  const armY0 = HR + 1   // start 1 row below shoulder top
 
   function fillArm(rootX: number, dx: number, dy: number) {
     for (let s = 0; s < armH; s++) {
