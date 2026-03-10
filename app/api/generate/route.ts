@@ -115,19 +115,20 @@ export async function POST(req: NextRequest) {
 
       const prompt = [
         'PixelArtRedmond',
-        `full body pixel art game sprite of ${characterDesc}`,
+        `full body pixel art RPG game sprite of ${characterDesc}`,
+        'entire body visible head to feet',
         POSE_PROMPTS[pose] ?? POSE_PROMPTS.idle,
         'two color monochrome pixel art, dark charcoal on light grey background',
-        '16-bit RPG character sprite, game asset, centered in frame',
+        '16-bit RPG character sprite, game asset, perfectly centered in frame',
         'clean simple background, flat pixel colors, sharp pixel edges',
-        'retro game sprite, 120x120 pixel art character',
+        'retro SNES RPG sprite, complete character sprite sheet frame',
       ].join(', ')
 
       const negPrompt = [
         'photorealistic', 'photo', '3d render', 'blurry', 'soft', 'gradient',
-        'colorful', 'multiple colors', 'brown skin', 'red clothing', 'blue eyes',
+        'colorful', 'multiple colors', 'cropped', 'cut off', 'headless', 'partial body',
         'multiple characters', 'text', 'watermark', 'border', 'frame',
-        'smooth lines', 'antialiased', 'high res photography',
+        'smooth lines', 'antialiased', 'high res photography', 'close up portrait',
       ].join(', ')
 
       // Try with IP-adapter for face consistency first, fall back without
@@ -135,13 +136,13 @@ export async function POST(req: NextRequest) {
         const payload: Record<string, unknown> = {
           prompt,
           negative_prompt: negPrompt,
-          image_size: { width: 120, height: 120 },
-          num_inference_steps: 30,
-          guidance_scale: 5.0,
+          image_size: { width: 512, height: 512 },
+          num_inference_steps: 28,
+          guidance_scale: 7.5,
           num_images: 1,
           output_format: 'png',
           enable_safety_checker: false,
-          loras: [{ path: PIXEL_LORA, scale: 1.0 }],
+          loras: [{ path: PIXEL_LORA, scale: 0.9 }],
           ...(poseSeed != null ? { seed: poseSeed } : {}),
         }
 
