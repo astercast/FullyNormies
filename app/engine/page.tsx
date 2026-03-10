@@ -31,10 +31,11 @@ const SH  = 72  // sprite height (28 head + 44 body)
 const HR  = 28  // head rows — consistent face cutoff across all Normies
 const SCL = 5   // display upscale (40x72 -> 200x360)
 
-type Pose = 'idle' | 'walk' | 'attack' | 'crouch'
-const POSES: Pose[] = ['idle', 'walk', 'attack', 'crouch']
+type Pose = 'idle' | 'walk' | 'run' | 'jump' | 'attack' | 'hurt' | 'crouch' | 'death'
+const POSES: Pose[] = ['idle', 'walk', 'run', 'jump', 'attack', 'hurt', 'crouch', 'death']
 const POSE_LABEL: Record<Pose,string> = {
-  idle: 'Idle', walk: 'Walk', attack: 'Attack', crouch: 'Crouch'
+  idle:'Idle', walk:'Walk', run:'Run', jump:'Jump',
+  attack:'Attack', hurt:'Hurt', crouch:'Crouch', death:'Death',
 }
 
 interface TraitAttr { trait_type: string; value: string }
@@ -95,14 +96,16 @@ interface PoseCfg {
 }
 
 const POSE_CFG: Record<Pose, PoseCfg> = {
-  // idle: arms hang slightly outward (natural rest)
-  idle:   { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
-  // walk: opposing arm/leg swing
-  walk:   { torsoSquash:0, lArmDx:-6, lArmDy:-4, rArmDx:6,  rArmDy:-4, lLegDx:-4, rLegDx: 4, legH:NORMAL_LEG_H },
-  // attack: right arm punches hard, left pulls back
-  attack: { torsoSquash:0, lArmDx:-4, lArmDy:2,  rArmDx:9,  rArmDy:-5, lLegDx:-3, rLegDx: 3, legH:NORMAL_LEG_H },
-  // crouch: body stays upright, legs SHORT and spread WIDE (bent-knee silhouette)
-  crouch: { torsoSquash:1, lArmDx:-5, lArmDy:5,  rArmDx:5,  rArmDy:5,  lLegDx:-6, rLegDx: 6, legH:8  },
+  // Movement
+  idle:   { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0,  rLegDx: 0,  legH:NORMAL_LEG_H },
+  walk:   { torsoSquash:0, lArmDx:-5, lArmDy:-3, rArmDx:5,  rArmDy:-3, lLegDx:-4,  rLegDx: 4,  legH:NORMAL_LEG_H },
+  run:    { torsoSquash:0, lArmDx:-7, lArmDy:-5, rArmDx:7,  rArmDy:-6, lLegDx:-5,  rLegDx: 5,  legH:NORMAL_LEG_H-1 },
+  jump:   { torsoSquash:0, lArmDx:-2, lArmDy:-8, rArmDx:2,  rArmDy:-8, lLegDx:-2,  rLegDx: 2,  legH:7 },
+  // Action / state
+  attack: { torsoSquash:0, lArmDx:-4, lArmDy:2,  rArmDx:9,  rArmDy:-5, lLegDx:-3,  rLegDx: 3,  legH:NORMAL_LEG_H },
+  hurt:   { torsoSquash:0, lArmDx:4,  lArmDy:-3, rArmDx:-3, rArmDy:1,  lLegDx: 2,  rLegDx:-2,  legH:NORMAL_LEG_H },
+  crouch: { torsoSquash:1, lArmDx:-5, lArmDy:5,  rArmDx:5,  rArmDy:5,  lLegDx:-5,  rLegDx: 5,  legH:8  },
+  death:  { torsoSquash:2, lArmDx:7,  lArmDy:4,  rArmDx:5,  rArmDy:6,  lLegDx: 5,  rLegDx: 8,  legH:7  },
 }
 
 // Hash all trait strings together for a richer, more unique seed per normie.
@@ -156,23 +159,16 @@ function drawNormie(pixels: string, traits: TraitsData, pose: Pose, tokenId: num
   const isAngry  = expr.includes('angry') || expr.includes('serious')
   const cx       = Math.floor(SW / 2)  // 20
 
-  // ── Body proportions driven by traits ────────────────────────────────────
-  // Beards / spiky hair → slightly broader shouldered
-  // Female → narrower shoulder + waist
-  // Young → smaller overall
-  // Old → slightly stockier
-  // Alien → narrowest
-  const baseShW = isAlien ? 12 : isFemale ? 14 : isOld ? 18 : isYoung ? 15 : hasBeard ? 18 : isSpiky ? 17 : 16
-  const baseTW  = isAlien ?  8 : isFemale ?  9 : isOld ? 12 : isYoung ? 10 : hasBeard ? 11 : 10
-  // Build variation: 3 levels (slim / medium / stocky) from s2
+  // ── Body proportions: slim torso + subtle taper, trait-driven ────────────
   const buildLvl = s2 % 3  // 0=slim  1=medium  2=stocky
-  const boneShW  = baseShW + [0, 1, 3][buildLvl]
-  const boneTW   = baseTW  + [0, 1, 2][buildLvl]
-
-  const tW = boneTW
-  const tX = cx - Math.floor(tW / 2)
-  const shW = boneShW
-  const shX = cx - Math.floor(shW / 2)
+  // Torso width: base varies by type/age/gender, +0/1/2 for build
+  const baseTW = isAlien ?  7 : isFemale ?  8 : isOld ? 10 : isYoung ? 9 : 10
+  const tW     = baseTW + buildLvl
+  // Shoulder is exactly 4px wider than torso (3px for female/alien)
+  // This gives a natural V-taper without looking like shoulder pads
+  const shW    = tW + (isFemale || isAlien ? 3 : hasBeard ? 5 : 4)
+  const tX     = cx - Math.floor(tW  / 2)
+  const shX    = cx - Math.floor(shW / 2)
 
   // ── HEAD (rows 0-27) ──────────────────────────────────────────────────────
   for (let r = 0; r < HR; r++)
@@ -243,12 +239,11 @@ function drawNormie(pixels: string, traits: TraitsData, pose: Pose, tokenId: num
     set(cx, tY + 11, false)
     if (isCat) for (let y = tY+5; y < tY+tH-2; y++) set(cx, y, false)
   } else if (shirtType === 1) {
-    // Striped shirt — narrow collar + alternating horizontal stripe gaps
+    // Striped shirt — V collar + 2 clean stripes (tighter margin, less cluttered)
     set(cx-1, tY, false); set(cx, tY, false)
-    // 3 light stripes at rows +3, +6, +9 (gaps in the dark fill = lighter stripe)
-    for (let x = tX+1; x < tX+tW-1; x++) {
-      set(x, tY+3, false); set(x, tY+6, false)
-      if (tY+9 < tY+tH-1) set(x, tY+9, false)
+    for (let x = tX+2; x < tX+tW-2; x++) {
+      if (tY+4 < tY+tH-2) set(x, tY+4, false)
+      if (tY+9 < tY+tH-2) set(x, tY+9, false)
     }
     if (isCat) for (let y = tY; y < tY+tH-2; y++) set(cx, y, false)
   } else {
@@ -276,7 +271,7 @@ function drawNormie(pixels: string, traits: TraitsData, pose: Pose, tokenId: num
   // Attach at outermost shoulder pixel
   const lArmX = shX
   const rArmX = shX + shW - armW
-  const armY0 = HR + 1   // start 1 row into the shoulder taper
+  const armY0 = HR   // arms start at the widest row of the shoulder taper
 
   function fillArm(rootX: number, dx: number, dy: number) {
     for (let s = 0; s < armH; s++) {
@@ -359,22 +354,25 @@ function upscale(src: HTMLCanvasElement, scale: number): HTMLCanvasElement {
   return out
 }
 
-// -- Build game-ready sprite sheet: NxN grid with optional padding ----------
-// Standard game format: each frame is SW×SH, laid out in a horizontal strip.
-// With 1px transparent gutters between frames (Unity/Godot friendly).
+// -- Build game-ready sprite sheet: 2 rows × 4 cols ─────────────────────────
+// Row 1: idle / walk / run / jump   (movement)
+// Row 2: attack / hurt / crouch / death  (action/state)
+// 1px transparent gutters between frames — Unity/Godot frame-slice friendly.
 function makeSheet(frames: (HTMLCanvasElement|null)[], scale = 1): HTMLCanvasElement {
-  const fw = SW * scale
-  const fh = SH * scale
-  const gap = scale  // 1 native px gutter between frames
+  const cols = 4, rows = 2
+  const fw   = SW * scale
+  const fh   = SH * scale
+  const gap  = scale
   const sheet = document.createElement('canvas')
-  sheet.width  = fw * 4 + gap * 3
-  sheet.height = fh
+  sheet.width  = fw * cols + gap * (cols - 1)
+  sheet.height = fh * rows + gap * (rows - 1)
   const ctx = sheet.getContext('2d')!
   ctx.imageSmoothingEnabled = false
   frames.forEach((f, i) => {
     if (!f) return
-    const src = upscale(f, 1)  // f is already at SCL, we need native
-    ctx.drawImage(f, i * (fw + gap), 0, fw, fh)
+    const col = i % cols
+    const row = Math.floor(i / cols)
+    ctx.drawImage(f, col * (fw + gap), row * (fh + gap), fw, fh)
   })
   return sheet
 }
@@ -482,7 +480,7 @@ function EngineInner() {
 
   // Generated canvases per pose (already upscaled)
   const [frames,    setFrames]   = useState<Record<Pose, HTMLCanvasElement|null>>({
-    idle:null, walk:null, attack:null, crouch:null,
+    idle:null, walk:null, run:null, jump:null, attack:null, hurt:null, crouch:null, death:null,
   })
   const [sheet,     setSheet]    = useState<HTMLCanvasElement|null>(null)
   const [activePose, setActivePose] = useState<Pose>('idle')
@@ -490,7 +488,6 @@ function EngineInner() {
   const [uploading, setUploading] = useState(false)
   const [savedUrl,  setSavedUrl]  = useState<string|null>(null)
   const [dlOpen,    setDlOpen]    = useState(false)
-  const [shareMsg,  setShareMsg]  = useState('')
 
   const hasFrames = POSES.some(p => frames[p])
 
@@ -506,7 +503,7 @@ function EngineInner() {
     setLoadState('loading'); setLoadErr('')
     setNormName(''); setNormTraits(null); setPixels(null)
     setSavedUrl(null); setCurrentId(id)
-    setFrames({ idle:null, walk:null, attack:null, crouch:null }); setSheet(null)
+    setFrames({ idle:null, walk:null, run:null, jump:null, attack:null, hurt:null, crouch:null, death:null }); setSheet(null)
     router.replace(`/engine?id=${id}`, { scroll:false })
 
     try {
@@ -532,10 +529,10 @@ function EngineInner() {
     }
   }
 
-  // -- Generate all 4 poses --------------------------------------------------
+  // -- Generate all 8 poses --------------------------------------------------
   const generateAll = useCallback((pix: string, td: TraitsData, id: number | null) => {
     const newFrames: Record<Pose, HTMLCanvasElement|null> = {
-      idle:null, walk:null, attack:null, crouch:null,
+      idle:null, walk:null, run:null, jump:null, attack:null, hurt:null, crouch:null, death:null,
     }
     POSES.forEach(pose => {
       const native = drawNormie(pix, td, pose, id)
@@ -544,10 +541,6 @@ function EngineInner() {
     setFrames({ ...newFrames })
     setSheet(makeSheet(POSES.map(p => newFrames[p])))
   }, [])
-
-  function regenerate() {
-    if (pixels && normTraits) generateAll(pixels, normTraits, currentId)
-  }
 
   // -- Download helpers ------------------------------------------------------
   // dlFrame downloads the active pose at chosen scale/format
@@ -571,25 +564,26 @@ function EngineInner() {
     }, 'image/png')
   }
 
-  // dlSheet downloads all 4 poses in a horizontal strip — game-engine ready
-  // scale options: 1=native (40px frames), 2=80px, 4=160px per frame
+  // dlSheet — 8 frames in 2×4 grid, game-engine ready
   function dlSheet(scale: number, transparent = false) {
-    const frames4 = POSES.map(p => frames[p])
+    const cols = 4, rows = 2
     const fw = SW * scale, fh = SH * scale
-    const gap = Math.max(1, scale)  // 1px gutter at native, scaled up
+    const gap = Math.max(1, scale)
     const out = document.createElement('canvas')
-    out.width  = fw * 4 + gap * 3
-    out.height = fh
+    out.width  = fw * cols + gap * (cols - 1)
+    out.height = fh * rows + gap * (rows - 1)
     const ctx  = out.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     if (!transparent) { ctx.fillStyle = `rgb(${PL[0]},${PL[1]},${PL[2]})`; ctx.fillRect(0,0,out.width,out.height) }
-    frames4.forEach((f, i) => {
-      if (f) ctx.drawImage(f, i*(fw+gap), 0, fw, fh)
+    POSES.forEach((p, i) => {
+      const f = frames[p]; if (!f) return
+      const col = i % cols, row = Math.floor(i / cols)
+      ctx.drawImage(f, col*(fw+gap), row*(fh+gap), fw, fh)
     })
     out.toBlob(b => {
       const a = Object.assign(document.createElement('a'), {
         href: URL.createObjectURL(b!),
-        download: `normie-${currentId}-sheet-${fw}x${fh}${transparent?'-transparent':''}.png`,
+        download: `normie-${currentId}-sheet-${fw}x${fh}-8frames${transparent?'-transparent':''}.png`,
       })
       a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000)
     }, 'image/png')
@@ -609,51 +603,29 @@ function EngineInner() {
     } catch { /* silent */ } finally { setUploading(false) }
   }
 
-  async function shareSprite() {
-    const c = frames['idle'] ?? frames[activePose]; if (!c) return
-    // Upscale to 4x for sharing (looks good on mobile)
-    const out = document.createElement('canvas')
-    out.width = SW * 4; out.height = SH * 4
-    const ctx = out.getContext('2d')!
-    ctx.imageSmoothingEnabled = false
-    ctx.fillStyle = `rgb(${PL[0]},${PL[1]},${PL[2]})`; ctx.fillRect(0,0,out.width,out.height)
-    ctx.drawImage(c, 0, 0, out.width, out.height)
-    out.toBlob(async blob => {
-      if (!blob) return
-      const file = new File([blob], `normie-${currentId}.png`, { type: 'image/png' })
-      if (navigator.share && navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({ title: `Normie #${currentId}`, files: [file] })
-          return
-        } catch {}
-      }
-      // Fallback: copy to clipboard
-      try {
-        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-        setShareMsg('Image copied to clipboard!')
-        setTimeout(() => setShareMsg(''), 2500)
-      } catch {
-        // Final fallback: download
-        const a = Object.assign(document.createElement('a'), {
-          href: URL.createObjectURL(blob), download: `normie-${currentId}.png`
-        })
-        a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000)
-      }
-    }, 'image/png')
+  function shareSprite() {
+    const url  = `https://fully-normies.vercel.app/engine?id=${currentId}`
+    const text = currentId != null
+      ? `Just generated Normie #${currentId} as a full body pixel art sprite with 8 animation frames! 🕹️\n`
+      : `Check out FullNormies — pixel art sprite generator for Normies NFTs! 🕹️\n`
+    window.open(
+      `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+      '_blank', 'noopener,noreferrer'
+    )
   }
 
   const traitList = normTraits?.attributes.filter(a => !['Level','Pixel Count','Action Points','Customized'].includes(a.trait_type)) ?? []
 
   // Download dropdown options
   const dlOptions = hasFrames ? [
-    { label: `Single frame — ${SW}×${SH}px (native)`,     action: () => dlFrame(activePose, 1) },
-    { label: `Single frame — ${SW*2}×${SH*2}px`,          action: () => dlFrame(activePose, 2) },
-    { label: `Single frame — ${SW*4}×${SH*4}px`,          action: () => dlFrame(activePose, 4) },
-    { label: `Single frame — transparent bg`,              action: () => dlFrame(activePose, 4, true) },
-    { label: `Sprite sheet — ${SW}px frames (native)`,     action: () => dlSheet(1) },
-    { label: `Sprite sheet — ${SW*2}px frames`,            action: () => dlSheet(2) },
-    { label: `Sprite sheet — ${SW*4}px frames`,            action: () => dlSheet(4) },
-    { label: `Sprite sheet — transparent bg`,              action: () => dlSheet(4, true) },
+    { label: `Frame: ${SW}×${SH}px native`,            action: () => dlFrame(activePose, 1) },
+    { label: `Frame: ${SW*2}×${SH*2}px`,               action: () => dlFrame(activePose, 2) },
+    { label: `Frame: ${SW*4}×${SH*4}px`,               action: () => dlFrame(activePose, 4) },
+    { label: `Frame: ${SW*4}×${SH*4}px transparent`,   action: () => dlFrame(activePose, 4, true) },
+    { label: `Sheet: ${SW}px frames · 2×4 · native`,   action: () => dlSheet(1) },
+    { label: `Sheet: ${SW*2}px frames · 2×4`,          action: () => dlSheet(2) },
+    { label: `Sheet: ${SW*4}px frames · 2×4`,          action: () => dlSheet(4) },
+    { label: `Sheet: ${SW*4}px frames · transparent`,  action: () => dlSheet(4, true) },
   ] : []
 
   return (
@@ -776,8 +748,11 @@ function EngineInner() {
                 <span style={{ fontSize:'.44rem', opacity:.5, letterSpacing:'.04em', textTransform:'none' as const }}>Canvas - Instant</span>
               </div>
 
-              {/* 4 pose cards */}
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'.4rem', marginBottom:'1rem' }}>
+              {/* 8 pose cards — 2 rows of 4 */}
+              <style>{`
+                @media(min-width:900px){ .fn-poses{ grid-template-columns:repeat(4,1fr) !important } }
+              `}</style>
+              <div className="fn-poses" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'.35rem', marginBottom:'1rem' }}>
                 {POSES.map(pose => (
                   <PoseCard
                     key={pose} pose={pose}
@@ -788,35 +763,22 @@ function EngineInner() {
                 ))}
               </div>
 
-              {/* Generate / action row */}
-              {loadState === 'done' && (
+              {/* Action row */}
+              {hasFrames && (
                 <div style={{ display:'flex', gap:'.3rem', marginBottom:'.7rem', flexWrap:'wrap' }}>
                   <button
-                    style={{ ...S.btn, ...S.fill, flex:1, fontSize:'.65rem', padding:'.55rem' }}
-                    onClick={regenerate}
-                  >↺ Regenerate</button>
-                  {hasFrames && (
-                    <button
-                      style={{ ...S.btn, flex:1, fontSize:'.65rem', padding:'.55rem' }}
-                      onClick={shareSprite}
-                    >↑ Share Image</button>
-                  )}
-                  {hasFrames && (
-                    <button
-                      style={{ ...S.btn, ...(savedUrl ? S.dis : {}), flex:1, fontSize:'.65rem', padding:'.55rem' }}
-                      onClick={saveToGallery} disabled={uploading||!!savedUrl}
-                    >{uploading ? 'Saving…' : savedUrl ? '✓ Saved' : '+ Gallery'}</button>
-                  )}
+                    style={{ ...S.btn, flex:1, fontSize:'.65rem', padding:'.55rem' }}
+                    onClick={shareSprite}
+                  >𝕏 Tweet</button>
+                  <button
+                    style={{ ...S.btn, ...(savedUrl ? S.dis : {}), flex:1, fontSize:'.65rem', padding:'.55rem' }}
+                    onClick={saveToGallery} disabled={uploading||!!savedUrl}
+                  >{uploading ? 'Saving…' : savedUrl ? '✓ Saved' : '+ Gallery'}</button>
                 </div>
               )}
-              {!hasFrames && loadState !== 'done' && (
+              {!hasFrames && (
                 <div style={{ fontSize:'.62rem', color:'var(--ink-muted)', marginBottom:'.7rem', lineHeight:1.9 }}>
-                  Load a Normie above to generate its full body sprites.
-                </div>
-              )}
-              {shareMsg && (
-                <div style={{ fontSize:'.6rem', color:'var(--ink)', marginBottom:'.5rem', padding:'.35rem .6rem', border:'1px solid var(--line)' }}>
-                  {shareMsg}
+                  {loadState === 'loading' ? 'Generating 8 poses…' : 'Load a Normie above to generate its full body sprites.'}
                 </div>
               )}
               {savedUrl && (
@@ -860,7 +822,7 @@ function EngineInner() {
                 <hr style={{ border:'none', borderTop:'1px solid var(--line-soft)', margin:'.9rem 0' }} />
                 <span style={S.lbl}>Sprite Sheet Preview</span>
                 <div style={{ fontSize:'.55rem', color:'var(--ink-muted)', marginBottom:'.5rem', lineHeight:1.7 }}>
-                  4 frames · {SW}×{SH}px each · 1px gutters · game-engine ready
+                  8 frames · 2 rows × 4 cols · {SW}×{SH}px each · 1px gutters · Unity / Godot ready
                 </div>
                 <div style={{ background:'#e3e5e4', border:'1px solid var(--line)', padding:4, display:'inline-block', maxWidth:'100%', overflow:'hidden' }}>
                   <canvas
@@ -876,14 +838,17 @@ function EngineInner() {
                     style={{ display:'block', imageRendering:'pixelated', maxWidth:'100%', height:'auto' }}
                   />
                 </div>
-                <div style={{ display:'flex', marginTop:'.25rem', maxWidth:'100%' }}>
-                  {POSES.map(p => (
-                    <span key={p} style={{
-                      fontSize:'.46rem', letterSpacing:'.08em', textTransform:'uppercase',
-                      color:'var(--ink-muted)', width:'25%', textAlign:'center', display:'inline-block',
-                    }}>{POSE_LABEL[p]}</span>
-                  ))}
-                </div>
+                {/* 2-row frame label grid */}
+                {[0,1].map(row => (
+                  <div key={row} style={{ display:'flex', marginTop:row===0?'.15rem':0, maxWidth:'100%' }}>
+                    {POSES.slice(row*4, row*4+4).map(p => (
+                      <span key={p} style={{
+                        fontSize:'.42rem', letterSpacing:'.06em', textTransform:'uppercase',
+                        color:'var(--ink-muted)', width:'25%', textAlign:'center', display:'inline-block',
+                      }}>{POSE_LABEL[p]}</span>
+                    ))}
+                  </div>
+                ))}
               </>)}
             </div>
 
