@@ -2,123 +2,10 @@
 import Link from 'next/link'
 import Nav from './components/Nav'
 import Footer from './components/Footer'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
-// ── Live preview that loads actual Normie #6793 face + generates body ──
-function HeroSprite({ id, label }: { id: number; label?: string }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    async function go() {
-      try {
-        const res = await fetch(`https://api.normies.art/normie/${id}/image.png`, { cache: 'force-cache' })
-        if (!res.ok || cancelled) return
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        const img = await new Promise<HTMLImageElement>((res, rej) => {
-          const i = new Image(); i.crossOrigin = 'anonymous'
-          i.onload = () => res(i); i.onerror = rej; i.src = url
-        })
-        if (cancelled) return
-
-        const c = canvasRef.current; if (!c) return
-        const ctx = c.getContext('2d')!; ctx.imageSmoothingEnabled = false
-
-        // Minimal inline sprite draw (same palette, same approach)
-        const PL = '#e3e5e4', PD = '#48494b'
-        const W = 80, H = 80
-
-        ctx.fillStyle = PL; ctx.fillRect(0, 0, W, H)
-
-        // Draw face at top (32×32)
-        const faceC = document.createElement('canvas'); faceC.width = faceC.height = 32
-        const fc = faceC.getContext('2d')!; fc.imageSmoothingEnabled = false
-        fc.drawImage(img, 0, 0, 32, 32)
-        const fd = fc.getImageData(0, 0, 32, 32).data
-        for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
-          const i = (y * 32 + x) * 4
-          const lm = 0.2126 * fd[i] + 0.7152 * fd[i + 1] + 0.0722 * fd[i + 2]
-          ctx.fillStyle = lm < 128 ? PD : PL
-          ctx.fillRect(24 + x, 2 + y, 1, 1)
-        }
-
-        // Body at 80px scale (simplified but connected)
-        const cx = 40
-        // Neck
-        ctx.fillStyle = PD; ctx.fillRect(cx - 3, 34, 6, 3)
-        // Shoulders
-        ctx.fillRect(cx - 14, 37, 28, 3)
-        ctx.fillStyle = PL; ctx.fillRect(cx - 12, 37, 24, 1)
-        // Torso
-        ctx.fillStyle = PD
-        ctx.fillRect(cx - 11, 40, 22, 1) // top
-        ctx.fillRect(cx - 11, 60, 22, 1) // bottom
-        ctx.fillRect(cx - 11, 40, 1, 21) // left side
-        ctx.fillRect(cx + 10, 40, 1, 21) // right side
-        ctx.fillStyle = PL; ctx.fillRect(cx - 10, 41, 20, 19) // fill
-        ctx.fillStyle = PD; ctx.fillRect(cx - 9, 52, 18, 1)   // chest seam
-        // Belt
-        ctx.fillStyle = PD; ctx.fillRect(cx - 12, 61, 24, 3)
-        ctx.fillStyle = PL; ctx.fillRect(cx - 2, 62, 4, 1)
-        ctx.fillStyle = PD; ctx.fillRect(cx - 1, 62, 2, 1)
-        // Arms
-        ctx.fillStyle = PD
-        ctx.fillRect(cx - 19, 38, 6, 18) // left upper+lower
-        ctx.fillRect(cx - 20, 56, 8, 7)  // left hand
-        ctx.fillStyle = PL; ctx.fillRect(cx - 19, 56, 6, 5)
-        ctx.fillStyle = PD
-        ctx.fillRect(cx + 13, 38, 6, 18) // right
-        ctx.fillRect(cx + 12, 56, 8, 7)
-        ctx.fillStyle = PL; ctx.fillRect(cx + 13, 56, 6, 5)
-        // Legs
-        ctx.fillStyle = PD
-        ctx.fillRect(cx - 11, 64, 9, 10) // left thigh
-        ctx.fillRect(cx + 2, 64, 9, 10)  // right thigh
-        ctx.fillRect(cx - 12, 74, 11, 3) // left knee
-        ctx.fillRect(cx + 1, 74, 11, 3)
-        ctx.fillStyle = PL; ctx.fillRect(cx - 11, 75, 9, 1); ctx.fillRect(cx + 2, 75, 9, 1)
-        ctx.fillStyle = PD
-        ctx.fillRect(cx - 11, 77, 9, 0) // calf stub
-        // Shoes
-        ctx.fillStyle = PD
-        ctx.fillRect(cx - 15, 74, 13, 6)
-        ctx.fillRect(cx + 2, 74, 13, 6)
-        ctx.fillStyle = PL
-        ctx.fillRect(cx - 13, 75, 9, 2)
-        ctx.fillRect(cx + 4, 75, 9, 2)
-
-        // Snap to strict palette
-        const id2 = ctx.getImageData(0, 0, W, H), p = id2.data
-        for (let i = 0; i < p.length; i += 4) {
-          const lm = 0.2126 * p[i] + 0.7152 * p[i + 1] + 0.0722 * p[i + 2]
-          if (lm < 128) { p[i] = 0x48; p[i + 1] = 0x49; p[i + 2] = 0x4b }
-          else { p[i] = 0xe3; p[i + 1] = 0xe5; p[i + 2] = 0xe4 }
-          p[i + 3] = 255
-        }
-        ctx.putImageData(id2, 0, 0)
-
-        URL.revokeObjectURL(url)
-        if (!cancelled) setReady(true)
-      } catch {}
-    }
-    go()
-    return () => { cancelled = true }
-  }, [id])
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <div style={{ background: '#e3e5e4', border: '1px solid rgba(72,73,75,.15)', padding: 2 }}>
-        <canvas ref={canvasRef} width={80} height={80}
-          style={{ display: 'block', imageRendering: 'pixelated', width: 80, height: 80, opacity: ready ? 1 : 0, transition: 'opacity .4s' }} />
-      </div>
-      {label && <span style={{ fontSize: '.4rem', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--ink-muted)' }}>{label}</span>}
-    </div>
-  )
-}
-
-// Strip of demo normies — loads actual faces from API
+// ── Strip of demo normies using the official API face images ──
+// Simple img-based strip — much more reliable than canvas rendering
 const DEMO_IDS = [6793, 1337, 420, 888, 3141, 2048]
 
 function HeroStrip() {
@@ -129,16 +16,23 @@ function HeroStrip() {
   }, [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-end' }}>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
         {DEMO_IDS.map((id, i) => (
           <div key={id} style={{
-            transform: active === i ? 'translateY(-8px) scale(1.1)' : 'none',
+            transform: active === i ? 'translateY(-6px) scale(1.08)' : 'none',
             transition: 'transform .4s cubic-bezier(.34,1.56,.64,1)',
-            filter: active === i ? 'none' : 'opacity(0.6)',
+            opacity: active === i ? 1 : 0.45,
             zIndex: active === i ? 2 : 1,
           }}>
-            <HeroSprite id={id} />
+            <div style={{ background: '#e3e5e4', border: '1px solid rgba(72,73,75,.15)', padding: 3 }}>
+              <img
+                src={`https://api.normies.art/normie/${id}/image.png`}
+                alt={`Normie #${id}`}
+                width={72} height={72}
+                style={{ display: 'block', imageRendering: 'pixelated', width: 72, height: 72 }}
+              />
+            </div>
           </div>
         ))}
       </div>
@@ -151,10 +45,10 @@ function HeroStrip() {
 
 export default function Home() {
   const features = [
-    { n: '01', title: 'Trait-aware bodies',     body: '8 pose types: Idle, Walk, Run, Jump, Attack, Hurt, Crouch, Death. Every Normie gets a unique build, outfit, and proportions driven by their on-chain traits.' },
+    { n: '01', title: 'Trait-aware bodies',     body: '4 animated clips: Idle, Walk, Jump, Crouch — each 4 keyframes. Every Normie gets a unique build, outfit, and proportions from on-chain traits.' },
     { n: '02', title: 'Real face compositing',  body: 'Your Normie\'s actual 40×40 face is pixel-sampled and composited onto the body. Every sunglass, beard, and mask preserved exactly.' },
     { n: '03', title: 'Strict 2-color palette', body: 'Every pixel snapped to #e3e5e4 / #48494b. No gradients, no blur — pure Normies-style monochrome at every scale.' },
-    { n: '04', title: '8-pose sprite sheets',   body: 'Two rows of 4: movement (Idle/Walk/Run/Jump) + action (Attack/Hurt/Crouch/Death). Export as a game-ready 2×4 sprite sheet.' },
+    { n: '04', title: '16-frame sprite sheets',  body: '4 clips × 4 keyframes in a game-ready 4×4 grid. Slice each row for Idle/Walk/Jump/Crouch animations in Unity or Godot.' },
     { n: '05', title: 'Community gallery',      body: 'Every saved sprite enters the public gallery. Browse, download at any size, and jump to any Normie\'s archive page.' },
     { n: '06', title: 'Game-ready exports',     body: 'Download at native 40px, 2×, or 4× scale. Transparent or solid background. Nearest-neighbor — zero quality loss.' },
   ]

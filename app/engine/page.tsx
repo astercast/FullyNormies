@@ -31,12 +31,9 @@ const SH  = 72  // sprite height (28 head + 44 body)
 const HR  = 28  // head rows — consistent face cutoff across all Normies
 const SCL = 5   // display upscale (40x72 -> 200x360)
 
-type Pose = 'idle' | 'walk' | 'run' | 'jump' | 'attack' | 'hurt' | 'crouch' | 'death'
-const POSES: Pose[] = ['idle', 'walk', 'run', 'jump', 'attack', 'hurt', 'crouch', 'death']
-const POSE_LABEL: Record<Pose,string> = {
-  idle:'Idle', walk:'Walk', run:'Run', jump:'Jump',
-  attack:'Attack', hurt:'Hurt', crouch:'Crouch', death:'Death',
-}
+type Pose = 'idle' | 'walk' | 'jump' | 'crouch'
+const POSES: Pose[] = ['idle', 'walk', 'jump', 'crouch']
+const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', jump:'Jump', crouch:'Crouch' }
 
 interface TraitAttr { trait_type: string; value: string }
 interface TraitsData { attributes: TraitAttr[] }
@@ -95,18 +92,42 @@ interface PoseCfg {
   legH:   number
 }
 
+// Reference poses — used for the 4 display cards
 const POSE_CFG: Record<Pose, PoseCfg> = {
-  // Movement
-  idle:   { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0,  rLegDx: 0,  legH:NORMAL_LEG_H },
-  walk:   { torsoSquash:0, lArmDx:-5, lArmDy:-3, rArmDx:5,  rArmDy:-3, lLegDx:-4,  rLegDx: 4,  legH:NORMAL_LEG_H },
-  run:    { torsoSquash:0, lArmDx:-7, lArmDy:-5, rArmDx:7,  rArmDy:-6, lLegDx:-5,  rLegDx: 5,  legH:NORMAL_LEG_H-1 },
-  jump:   { torsoSquash:0, lArmDx:-2, lArmDy:-8, rArmDx:2,  rArmDy:-8, lLegDx:-2,  rLegDx: 2,  legH:7 },
-  // Action / state
-  attack: { torsoSquash:0, lArmDx:-4, lArmDy:2,  rArmDx:9,  rArmDy:-5, lLegDx:-3,  rLegDx: 3,  legH:NORMAL_LEG_H },
-  hurt:   { torsoSquash:0, lArmDx:4,  lArmDy:-3, rArmDx:-3, rArmDy:1,  lLegDx: 2,  rLegDx:-2,  legH:NORMAL_LEG_H },
-  crouch: { torsoSquash:1, lArmDx:-5, lArmDy:5,  rArmDx:5,  rArmDy:5,  lLegDx:-5,  rLegDx: 5,  legH:8  },
-  death:  { torsoSquash:2, lArmDx:7,  lArmDy:4,  rArmDx:5,  rArmDy:6,  lLegDx: 5,  rLegDx: 8,  legH:7  },
+  idle:   { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+  walk:   { torsoSquash:0, lArmDx:-6, lArmDy:-3, rArmDx:4,  rArmDy:-1, lLegDx:-5, rLegDx: 3, legH:NORMAL_LEG_H },
+  jump:   { torsoSquash:0, lArmDx:-2, lArmDy:-8, rArmDx:2,  rArmDy:-8, lLegDx:-2, rLegDx: 2, legH:7 },
+  crouch: { torsoSquash:1, lArmDx:-5, lArmDy:5,  rArmDx:5,  rArmDy:5,  lLegDx:-5, rLegDx: 5, legH:8 },
 }
+
+// Full animation clips — 4 clips × 4 keyframes = 16 frames in the downloadable sheet
+// Row 0: Idle  Row 1: Walk  Row 2: Jump  Row 3: Crouch
+const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
+  { label: 'Idle', frames: [
+    { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+    { torsoSquash:0, lArmDx:-1, lArmDy:3,  rArmDx:1,  rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+    { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+    { torsoSquash:0, lArmDx:-1, lArmDy:3,  rArmDx:1,  rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+  ]},
+  { label: 'Walk', frames: [
+    { torsoSquash:0, lArmDx:-6, lArmDy:-3, rArmDx:4,  rArmDy:-1, lLegDx:-5, rLegDx: 3, legH:NORMAL_LEG_H },
+    { torsoSquash:0, lArmDx:-2, lArmDy: 1, rArmDx:1,  rArmDy: 1, lLegDx:-1, rLegDx: 1, legH:NORMAL_LEG_H },
+    { torsoSquash:0, lArmDx: 4, lArmDy:-1, rArmDx:-6, rArmDy:-3, lLegDx: 3, rLegDx:-5, legH:NORMAL_LEG_H },
+    { torsoSquash:0, lArmDx: 1, lArmDy: 1, rArmDx:-2, rArmDy: 1, lLegDx: 1, rLegDx:-1, legH:NORMAL_LEG_H },
+  ]},
+  { label: 'Jump', frames: [
+    { torsoSquash:1, lArmDx:-3, lArmDy: 3, rArmDx:3,  rArmDy: 3, lLegDx:-3, rLegDx: 3, legH:9  },
+    { torsoSquash:0, lArmDx:-4, lArmDy:-5, rArmDx:4,  rArmDy:-5, lLegDx:-1, rLegDx: 1, legH:11 },
+    { torsoSquash:0, lArmDx:-2, lArmDy:-8, rArmDx:2,  rArmDy:-8, lLegDx:-2, rLegDx: 2, legH:7  },
+    { torsoSquash:1, lArmDx:-3, lArmDy: 2, rArmDx:3,  rArmDy: 2, lLegDx:-4, rLegDx: 4, legH:9  },
+  ]},
+  { label: 'Crouch', frames: [
+    { torsoSquash:0, lArmDx:-3, lArmDy: 3, rArmDx:3,  rArmDy: 3, lLegDx:-3, rLegDx: 3, legH:10 },
+    { torsoSquash:1, lArmDx:-5, lArmDy: 5, rArmDx:5,  rArmDy: 5, lLegDx:-5, rLegDx: 5, legH:8  },
+    { torsoSquash:1, lArmDx:-5, lArmDy: 5, rArmDx:5,  rArmDy: 5, lLegDx:-5, rLegDx: 5, legH:8  },
+    { torsoSquash:0, lArmDx:-3, lArmDy: 3, rArmDx:3,  rArmDy: 3, lLegDx:-3, rLegDx: 3, legH:10 },
+  ]},
+]
 
 // Hash all trait strings together for a richer, more unique seed per normie.
 // Using all 8 trait fields gives ~4x more spread than token ID alone.
@@ -124,10 +145,10 @@ function traitHash(id: number | null, traits: TraitsData): number {
 // =============================================================================
 //  drawNormie: compose head pixels + procedural body into a SW x SH sprite
 // =============================================================================
-function drawNormie(pixels: string, traits: TraitsData, pose: Pose, tokenId: number | null = null): HTMLCanvasElement {
+function drawNormie(pixels: string, traits: TraitsData, poseOrCfg: Pose | PoseCfg, tokenId: number | null = null): HTMLCanvasElement {
   const { canvas, px, flush } = createSprite()
   const set = px
-  const cfg  = POSE_CFG[pose]
+  const cfg  = typeof poseOrCfg === 'string' ? POSE_CFG[poseOrCfg] : poseOrCfg
 
   // Rich seed from ALL traits: gives each normie a genuinely unique body
   const seed = traitHash(tokenId, traits)
@@ -161,11 +182,11 @@ function drawNormie(pixels: string, traits: TraitsData, pose: Pose, tokenId: num
 
   // ── Body proportions ───────────────────────────────────────────────────
   const buildLvl = s2 % 3  // 0=slim  1=medium  2=stocky
-  // Clear gender separation: female 8-10, male 11-13, old/cat wider
-  const baseTW = isAlien ? 7 : isFemale ? 8 : isYoung ? 10 : isOld ? 12 : isCat ? 11 : 11
+  // Female 8-10px, male 12-14px — clear separation so males read as broad
+  const baseTW = isAlien ? 8 : isFemale ? 8 : isYoung ? 10 : isOld ? 12 : isCat ? 11 : 12
   const tW     = baseTW + buildLvl
-  // Shoulder taper: female/alien much narrower shoulder delta
-  const shW    = tW + (isFemale ? 2 : isAlien ? 2 : hasBeard ? 6 : isOld ? 6 : 5)
+  // Shoulder adds a flat 4px for non-female — proportionate, not padded
+  const shW    = tW + (isFemale || isAlien ? 2 : 4)
   const tX     = cx - Math.floor(tW  / 2)
   const shX    = cx - Math.floor(shW / 2)
 
@@ -188,8 +209,8 @@ function drawNormie(pixels: string, traits: TraitsData, pose: Pose, tokenId: num
   const tH = 15 - cfg.torsoSquash
 
   for (let y = 0; y < tH; y++) {
-    // chest (0-2): full, waist (3-7): pinch 1px each side, hip (8+): full
-    const inset = (y >= 3 && y <= 7) ? 1 : 0
+    // Only females get a waist pinch — males stay rectangular (masculine silhouette)
+    const inset = (isFemale && y >= 3 && y <= 7) ? 1 : 0
     for (let x = tX + inset; x < tX + tW - inset; x++) set(x, tY + y, true)
   }
 
@@ -353,25 +374,20 @@ function upscale(src: HTMLCanvasElement, scale: number): HTMLCanvasElement {
   return out
 }
 
-// -- Build game-ready sprite sheet: 2 rows × 4 cols ─────────────────────────
-// Row 1: idle / walk / run / jump   (movement)
-// Row 2: attack / hurt / crouch / death  (action/state)
-// 1px transparent gutters between frames — Unity/Godot frame-slice friendly.
-function makeSheet(frames: (HTMLCanvasElement|null)[], scale = 1): HTMLCanvasElement {
-  const cols = 4, rows = 2
-  const fw   = SW * scale
-  const fh   = SH * scale
-  const gap  = scale
+// -- Build full 16-frame animation sheet — 4 clips × 4 keyframes ───────────────
+// Row 0: Idle  Row 1: Walk  Row 2: Jump  Row 3: Crouch
+function makeAnimSheet(pix: string, traits: TraitsData, tokenId: number | null, scale = 1): HTMLCanvasElement {
+  const cols = 4, rows = ANIM_CLIPS.length
+  const fw = SW * scale, fh = SH * scale, gap = scale
   const sheet = document.createElement('canvas')
   sheet.width  = fw * cols + gap * (cols - 1)
   sheet.height = fh * rows + gap * (rows - 1)
   const ctx = sheet.getContext('2d')!
   ctx.imageSmoothingEnabled = false
-  frames.forEach((f, i) => {
-    if (!f) return
-    const col = i % cols
-    const row = Math.floor(i / cols)
-    ctx.drawImage(f, col * (fw + gap), row * (fh + gap), fw, fh)
+  ANIM_CLIPS.forEach((clip, row) => {
+    clip.frames.forEach((cfg, col) => {
+      ctx.drawImage(upscale(drawNormie(pix, traits, cfg, tokenId), scale), col * (fw + gap), row * (fh + gap))
+    })
   })
   return sheet
 }
@@ -479,7 +495,7 @@ function EngineInner() {
 
   // Generated canvases per pose (already upscaled)
   const [frames,    setFrames]   = useState<Record<Pose, HTMLCanvasElement|null>>({
-    idle:null, walk:null, run:null, jump:null, attack:null, hurt:null, crouch:null, death:null,
+    idle:null, walk:null, jump:null, crouch:null,
   })
   const [sheet,     setSheet]    = useState<HTMLCanvasElement|null>(null)
   const [activePose, setActivePose] = useState<Pose>('idle')
@@ -502,7 +518,7 @@ function EngineInner() {
     setLoadState('loading'); setLoadErr('')
     setNormName(''); setNormTraits(null); setPixels(null)
     setSavedUrl(null); setCurrentId(id)
-    setFrames({ idle:null, walk:null, run:null, jump:null, attack:null, hurt:null, crouch:null, death:null }); setSheet(null)
+    setFrames({ idle:null, walk:null, jump:null, crouch:null }); setSheet(null)
     router.replace(`/engine?id=${id}`, { scroll:false })
 
     try {
@@ -528,17 +544,17 @@ function EngineInner() {
     }
   }
 
-  // -- Generate all 8 poses --------------------------------------------------
+  // -- Generate 4 reference pose cards + full 16-frame animation sheet -------
   const generateAll = useCallback((pix: string, td: TraitsData, id: number | null) => {
     const newFrames: Record<Pose, HTMLCanvasElement|null> = {
-      idle:null, walk:null, run:null, jump:null, attack:null, hurt:null, crouch:null, death:null,
+      idle:null, walk:null, jump:null, crouch:null,
     }
     POSES.forEach(pose => {
       const native = drawNormie(pix, td, pose, id)
       newFrames[pose] = upscale(native, SCL)
     })
     setFrames({ ...newFrames })
-    setSheet(makeSheet(POSES.map(p => newFrames[p])))
+    setSheet(makeAnimSheet(pix, td, id, SCL))
   }, [])
 
   // -- Download helpers ------------------------------------------------------
@@ -563,26 +579,26 @@ function EngineInner() {
     }, 'image/png')
   }
 
-  // dlSheet — 8 frames in 2×4 grid, game-engine ready
+  // dlSheet — 16-frame animation sheet (4 clips × 4 keyframes), generated on-the-fly
   function dlSheet(scale: number, transparent = false) {
-    const cols = 4, rows = 2
-    const fw = SW * scale, fh = SH * scale
-    const gap = Math.max(1, scale)
+    if (!pixels || !normTraits) return
+    const cols = 4, rows = ANIM_CLIPS.length
+    const fw = SW * scale, fh = SH * scale, gap = Math.max(1, scale)
     const out = document.createElement('canvas')
     out.width  = fw * cols + gap * (cols - 1)
     out.height = fh * rows + gap * (rows - 1)
     const ctx  = out.getContext('2d')!
     ctx.imageSmoothingEnabled = false
     if (!transparent) { ctx.fillStyle = `rgb(${PL[0]},${PL[1]},${PL[2]})`; ctx.fillRect(0,0,out.width,out.height) }
-    POSES.forEach((p, i) => {
-      const f = frames[p]; if (!f) return
-      const col = i % cols, row = Math.floor(i / cols)
-      ctx.drawImage(f, col*(fw+gap), row*(fh+gap), fw, fh)
+    ANIM_CLIPS.forEach((clip, row) => {
+      clip.frames.forEach((cfg, col) => {
+        ctx.drawImage(upscale(drawNormie(pixels, normTraits!, cfg, currentId), scale), col*(fw+gap), row*(fh+gap))
+      })
     })
     out.toBlob(b => {
       const a = Object.assign(document.createElement('a'), {
         href: URL.createObjectURL(b!),
-        download: `normie-${currentId}-sheet-${fw}x${fh}-8frames${transparent?'-transparent':''}.png`,
+        download: `normie-${currentId}-anim-${fw}x${fh}-16f${transparent?'-t':''}.png`,
       })
       a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000)
     }, 'image/png')
@@ -617,14 +633,14 @@ function EngineInner() {
 
   // Download dropdown options
   const dlOptions = hasFrames ? [
-    { label: `Frame: ${SW}×${SH}px native`,            action: () => dlFrame(activePose, 1) },
-    { label: `Frame: ${SW*2}×${SH*2}px`,               action: () => dlFrame(activePose, 2) },
-    { label: `Frame: ${SW*4}×${SH*4}px`,               action: () => dlFrame(activePose, 4) },
-    { label: `Frame: ${SW*4}×${SH*4}px transparent`,   action: () => dlFrame(activePose, 4, true) },
-    { label: `Sheet: ${SW}px frames · 2×4 · native`,   action: () => dlSheet(1) },
-    { label: `Sheet: ${SW*2}px frames · 2×4`,          action: () => dlSheet(2) },
-    { label: `Sheet: ${SW*4}px frames · 2×4`,          action: () => dlSheet(4) },
-    { label: `Sheet: ${SW*4}px frames · transparent`,  action: () => dlSheet(4, true) },
+    { label: `Frame: ${SW}×${SH}px native`,             action: () => dlFrame(activePose, 1) },
+    { label: `Frame: ${SW*2}×${SH*2}px`,                action: () => dlFrame(activePose, 2) },
+    { label: `Frame: ${SW*4}×${SH*4}px`,                action: () => dlFrame(activePose, 4) },
+    { label: `Frame: ${SW*4}×${SH*4}px transparent`,    action: () => dlFrame(activePose, 4, true) },
+    { label: `Sheet: ${SW}px · 4×4 · 16 frames · native`, action: () => dlSheet(1) },
+    { label: `Sheet: ${SW*2}px · 4×4 · 16 frames`,       action: () => dlSheet(2) },
+    { label: `Sheet: ${SW*4}px · 4×4 · 16 frames`,       action: () => dlSheet(4) },
+    { label: `Sheet: ${SW*4}px · transparent`,           action: () => dlSheet(4, true) },
   ] : []
 
   return (
@@ -753,11 +769,8 @@ function EngineInner() {
                 <span style={{ fontSize:'.44rem', opacity:.5, letterSpacing:'.04em', textTransform:'none' as const }}>Canvas - Instant</span>
               </div>
 
-              {/* 8 pose cards — 2 rows of 4 */}
-              <style>{`
-                @media(min-width:900px){ .fn-poses{ grid-template-columns:repeat(4,1fr) !important } }
-              `}</style>
-              <div className="fn-poses" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'.35rem', marginBottom:'1rem' }}>
+              {/* 4 pose cards — single row */}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'.35rem', marginBottom:'1rem' }}>
                 {POSES.map(pose => (
                   <PoseCard
                     key={pose} pose={pose}
@@ -812,7 +825,7 @@ function EngineInner() {
                         <button key={i} style={{ ...S.btn, width:'100%', borderWidth:0, borderBottom:'1px solid var(--line-soft)', justifyContent:'flex-start', fontSize:'.6rem', padding:'.4rem .8rem' }}
                           onClick={() => { o.action(); setDlOpen(false) }}>{o.label}</button>
                       ))}
-                      <div style={{ padding:'.28rem .6rem', fontSize:'.48rem', letterSpacing:'.1em', textTransform:'uppercase', color:'var(--ink-muted)', borderBottom:'1px solid var(--line-soft)', borderTop:'1px solid var(--line-soft)', marginTop:'.1rem' }}>Sprite Sheet — all 4 poses</div>
+                      <div style={{ padding:'.28rem .6rem', fontSize:'.48rem', letterSpacing:'.1em', textTransform:'uppercase', color:'var(--ink-muted)', borderBottom:'1px solid var(--line-soft)', borderTop:'1px solid var(--line-soft)', marginTop:'.1rem' }}>Animation Sheet — 16 frames (4×4)</div>
                       {dlOptions.slice(4).map((o,i) => (
                         <button key={i+4} style={{ ...S.btn, width:'100%', borderWidth:0, borderBottom:'1px solid var(--line-soft)', justifyContent:'flex-start', fontSize:'.6rem', padding:'.4rem .8rem' }}
                           onClick={() => { o.action(); setDlOpen(false) }}>{o.label}</button>
@@ -827,7 +840,7 @@ function EngineInner() {
                 <hr style={{ border:'none', borderTop:'1px solid var(--line-soft)', margin:'.9rem 0' }} />
                 <span style={S.lbl}>Sprite Sheet Preview</span>
                 <div style={{ fontSize:'.55rem', color:'var(--ink-muted)', marginBottom:'.5rem', lineHeight:1.7 }}>
-                  8 frames · 2 rows × 4 cols · {SW}×{SH}px each · 1px gutters · Unity&nbsp;/&nbsp;Godot ready
+                  16 frames · 4 clips × 4 keyframes · {SW}×{SH}px · Idle/Walk/Jump/Crouch · Unity&nbsp;/&nbsp;Godot
                 </div>
                 <div style={{ background:'#e3e5e4', border:'1px solid var(--line)', padding:4, display:'inline-block', maxWidth:'100%', overflow:'hidden' }}>
                   <canvas
@@ -843,14 +856,14 @@ function EngineInner() {
                     style={{ display:'block', imageRendering:'pixelated', maxWidth:'100%', height:'auto' }}
                   />
                 </div>
-                {/* 2-row frame label grid */}
-                {[0,1].map(row => (
-                  <div key={row} style={{ display:'flex', marginTop:row===0?'.15rem':0, maxWidth:'100%' }}>
-                    {POSES.slice(row*4, row*4+4).map(p => (
-                      <span key={p} style={{
-                        fontSize:'.42rem', letterSpacing:'.06em', textTransform:'uppercase',
-                        color:'var(--ink-muted)', width:'25%', textAlign:'center', display:'inline-block',
-                      }}>{POSE_LABEL[p]}</span>
+                {/* Clip row labels: name + F2/F3/F4 for each row */}
+                {ANIM_CLIPS.map((clip, row) => (
+                  <div key={row} style={{ display:'flex', marginTop:'.1rem', maxWidth:'100%' }}>
+                    <span style={{ width:'25%', fontSize:'.44rem', letterSpacing:'.06em', textTransform:'uppercase',
+                      color:'var(--ink)', fontWeight:700, textAlign:'center', display:'inline-block' }}>{clip.label}</span>
+                    {[2,3,4].map(n => (
+                      <span key={n} style={{ width:'25%', fontSize:'.42rem', color:'var(--ink-muted)',
+                        textAlign:'center', display:'inline-block' }}>F{n}</span>
                     ))}
                   </div>
                 ))}
