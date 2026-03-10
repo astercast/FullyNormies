@@ -17,7 +17,7 @@ export const NORMAL_LEG_H = 13
 // -- Types --------------------------------------------------------------------
 export interface TraitAttr { trait_type: string; value: string }
 export interface TraitsData { attributes: TraitAttr[] }
-export type Pose = 'idle' | 'walk' | 'jump' | 'crouch'
+export type Pose = 'idle' | 'walk' | 'sit' | 'crouch'
 
 export interface PoseCfg {
   torsoSquash: number
@@ -28,14 +28,15 @@ export interface PoseCfg {
 }
 
 // -- Pose data ----------------------------------------------------------------
-export const POSES: Pose[] = ['idle', 'walk', 'jump', 'crouch']
-export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', jump:'Jump', crouch:'Crouch' }
+export const POSES: Pose[] = ['idle', 'walk', 'sit', 'crouch']
+export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', sit:'Sit', crouch:'Crouch' }
 
 // Reference poses — used for the 4 display cards
 export const POSE_CFG: Record<Pose, PoseCfg> = {
   idle:   { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
   walk:   { torsoSquash:0, lArmDx:-1, lArmDy:-5, rArmDx:+1, rArmDy:+3, lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
-  jump:   { torsoSquash:0, lArmDx:-2, lArmDy:-8, rArmDx:2,  rArmDy:-8, lLegDx:-3, rLegDx: 3, legH:7 },
+  // Sit: torso upright, legs bent outward (short legH + large outward drift = seated silhouette)
+  sit:    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx:-6, rLegDx:+6, legH:5 },
   crouch: { torsoSquash:2, lArmDx:-3, lArmDy:5,  rArmDx:3,  rArmDy:5,  lLegDx: 0, rLegDx: 0, legH:8 },
 }
 
@@ -75,16 +76,13 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
   ]},
 
   //
-  // ── JUMP  (crouch-wind-up → launch → apex-tuck → land) ───────────────────
-  { label: 'Jump', frames: [
-    // F1 pre-jump crouch: mild body squash, arms draw back
-    { torsoSquash:1, lArmDx:-1, lArmDy: 3, rArmDx: 1, rArmDy: 3, lLegDx:-2, rLegDx: 2, legH:8 },
-    // F2 launch: legs extend, arms drive upward
-    { torsoSquash:0, lArmDx:-3, lArmDy:-5, rArmDx: 3, rArmDy:-5, lLegDx:-1, rLegDx: 1, legH:NORMAL_LEG_H },
-    // F3 apex: arms raised, legs tuck up
-    { torsoSquash:0, lArmDx:-2, lArmDy:-8, rArmDx: 2, rArmDy:-8, lLegDx:-3, rLegDx: 3, legH:6  },
-    // F4 land: arms out for balance, legs absorb impact
-    { torsoSquash:1, lArmDx:-4, lArmDy: 3, rArmDx: 4, rArmDy: 3, lLegDx:-2, rLegDx: 2, legH:8  },
+  // ── SIT  (gentle idle sway while seated) ─────────────────────────────────
+  // Legs short + drifted outward = seated silhouette. Arms rest at sides with subtle bob.
+  { label: 'Sit', frames: [
+    { torsoSquash:0, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx:-6, rLegDx:+6, legH:5 },
+    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx:-6, rLegDx:+6, legH:5 },
+    { torsoSquash:0, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx:-6, rLegDx:+6, legH:5 },
+    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx:-6, rLegDx:+6, legH:5 },
   ]},
 
   //

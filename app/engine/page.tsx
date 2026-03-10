@@ -114,7 +114,7 @@ function EngineInner() {
 
   // Generated canvases per pose (already upscaled)
   const [frames,    setFrames]   = useState<Record<Pose, HTMLCanvasElement|null>>({
-    idle:null, walk:null, jump:null, crouch:null,
+    idle:null, walk:null, sit:null, crouch:null,
   })
   const [sheet,     setSheet]    = useState<HTMLCanvasElement|null>(null)
   const [activePose, setActivePose] = useState<Pose>('idle')
@@ -137,7 +137,7 @@ function EngineInner() {
     setLoadState('loading'); setLoadErr('')
     setNormName(''); setNormTraits(null); setPixels(null)
     setSavedUrl(null); setCurrentId(id)
-    setFrames({ idle:null, walk:null, jump:null, crouch:null }); setSheet(null)
+      setFrames({ idle:null, walk:null, sit:null, crouch:null }); setSheet(null)
     router.replace(`/engine?id=${id}`, { scroll:false })
 
     try {
@@ -166,7 +166,7 @@ function EngineInner() {
   // -- Generate 4 reference pose cards + full 16-frame animation sheet -------
   const generateAll = useCallback((pix: string, td: TraitsData, id: number | null) => {
     const newFrames: Record<Pose, HTMLCanvasElement|null> = {
-      idle:null, walk:null, jump:null, crouch:null,
+      idle:null, walk:null, sit:null, crouch:null,
     }
     POSES.forEach(pose => {
       const native = drawNormie(pix, td, pose, id)
