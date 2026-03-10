@@ -10,10 +10,10 @@ import { Suspense } from 'react'
 //
 //  How it works:
 //    1. Fetch 1600-char pixel string from api.normies.art/normie/:id/pixels
-//    2. Extract the real Normie head (rows 0-31 of the 40x40 bitmap — captures beards)
+//    2. Extract the real Normie head (rows 0-27 of the 40x40 bitmap)
 //    3. Procedurally draw a full body below:  torso → arms → hands → legs → feet
 //       All body parts reference traits (type, gender, age, accessory) for shape
-//    4. Compose into 40x76 canvas (head 32px tall + body 44px tall)
+//    4. Compose into 40x72 canvas (head 28px tall + body 44px tall)
 //    5. Generate 4 pose variants by translating/rotating limbs
 //    6. Upscale to crisp display (4x = 160x288) with nearest-neighbor
 //
@@ -27,9 +27,9 @@ const PD: [number,number,number] = [0x48,0x49,0x4b]  // dark charcoal
 
 // Native sprite dimensions
 const SW  = 40  // sprite width (matches Normie head width)
-const SH  = 76  // sprite height (32 head + 44 body)
-const HR  = 32  // head rows — 32 captures beards/chins (original face is 40 tall)
-const SCL = 5   // display upscale (40x76 -> 200x380)
+const SH  = 72  // sprite height (28 head + 44 body)
+const HR  = 28  // head rows — consistent face cutoff across all Normies
+const SCL = 5   // display upscale (40x72 -> 200x360)
 
 type Pose = 'idle' | 'walk' | 'run' | 'jump' | 'attack' | 'hurt' | 'crouch' | 'death'
 const POSES: Pose[] = ['idle', 'walk', 'run', 'jump', 'attack', 'hurt', 'crouch', 'death']
@@ -75,7 +75,7 @@ function rect(set:(x:number,y:number,d:boolean)=>void, x:number,y:number,w:numbe
 // =============================================================================
 const TORSO_X  = 14   // left edge of 12px torso (centered in 40px)
 const TORSO_W  = 12
-const TORSO_Y  = HR   // 32 -- right below head
+const TORSO_Y  = HR   // 28 -- right below head
 const TORSO_H  = 20   // rows 28-47 in idle
 const ARM_H    = 9    // arm segment length in pixels
 const LEG_W    = 4
@@ -159,23 +159,22 @@ function drawNormie(pixels: string, traits: TraitsData, pose: Pose, tokenId: num
   const isAngry  = expr.includes('angry') || expr.includes('serious')
   const cx       = Math.floor(SW / 2)  // 20
 
-  // ── Body proportions: slim torso + subtle taper, trait-driven ────────────
+  // ── Body proportions ───────────────────────────────────────────────────
   const buildLvl = s2 % 3  // 0=slim  1=medium  2=stocky
-  // Torso width: base varies by type/age/gender, +0/1/2 for build
-  const baseTW = isAlien ?  7 : isFemale ?  8 : isOld ? 10 : isYoung ? 9 : 10
+  // Clear gender separation: female 8-10, male 11-13, old/cat wider
+  const baseTW = isAlien ? 7 : isFemale ? 8 : isYoung ? 10 : isOld ? 12 : isCat ? 11 : 11
   const tW     = baseTW + buildLvl
-  // Shoulder is exactly 4px wider than torso (3px for female/alien)
-  // This gives a natural V-taper without looking like shoulder pads
-  const shW    = tW + (isFemale || isAlien ? 3 : hasBeard ? 5 : 4)
+  // Shoulder taper: female/alien much narrower shoulder delta
+  const shW    = tW + (isFemale ? 2 : isAlien ? 2 : hasBeard ? 6 : isOld ? 6 : 5)
   const tX     = cx - Math.floor(tW  / 2)
   const shX    = cx - Math.floor(shW / 2)
 
-  // ── HEAD (rows 0-31) — 32 rows captures beard / chin area ─────────────────
+  // ── HEAD (rows 0-27) ──────────────────────────────────────────────────────
   for (let r = 0; r < HR; r++)
     for (let c = 0; c < SW; c++)
       if (pixels[r * SW + c] === '1') set(c, r, true)
 
-  // ── SHOULDER TAPER (rows 32-35): 4-row lerp shoulder→torso ──────────────
+  // ── SHOULDER TAPER (rows 28-30): 4-row lerp shoulder→torso ───────────────
   // Gives a natural trapezoid silhouette instead of a rectangle
   for (let si = 0; si < 4; si++) {
     const t  = si / 3
@@ -631,7 +630,13 @@ function EngineInner() {
   return (
     <div style={{ display:'flex', flexDirection:'column', minHeight:'100vh' }}>
       <Nav />
-      <main style={{ flex:1 }}>
+      <main style={{
+        flex:1,
+        // Zoom the engine out 25% so more content is visible at once
+        // Text sizes are bumped below to compensate
+        transformOrigin:'top center',
+        zoom: '0.78',
+      }}>
 
         {/* -- Token input ----------------------------------------------------- */}
         <div style={{ borderBottom:'1px solid var(--line)', padding:'1.3rem 0' }}>
@@ -647,8 +652,8 @@ function EngineInner() {
                   inputMode="numeric"
                   style={{
                     background:'transparent', border:'1px solid var(--line)',
-                    color:'var(--ink)', fontFamily:'inherit', fontSize:'1.75rem',
-                    fontWeight:900, letterSpacing:'-.04em', width:'7.2rem',
+                    color:'var(--ink)', fontFamily:'inherit', fontSize:'2.2rem',
+                    fontWeight:900, letterSpacing:'-.04em', width:'8rem',
                     padding:'.25rem .55rem', outline:'none', appearance:'textfield' as const,
                   }}
                 />
@@ -715,15 +720,15 @@ function EngineInner() {
                 )}
               </div>
 
-              {normName && <div style={{ fontSize:'1.3rem', fontWeight:900, letterSpacing:'-.05em', lineHeight:1, marginBottom:'.9rem' }}>{normName}</div>}
+              {normName && <div style={{ fontSize:'1.6rem', fontWeight:900, letterSpacing:'-.05em', lineHeight:1, marginBottom:'.9rem' }}>{normName}</div>}
 
               <span style={S.lbl}>Traits</span>
               <div style={{ display:'grid', gridTemplateColumns:'auto 1fr' }}>
                 {traitList.length === 0 ? (
                   <div style={{ gridColumn:'span 2', fontSize:'.65rem', color:'var(--ink-muted)', padding:'.3rem 0' }}>No traits loaded.</div>
                 ) : traitList.map((t,i) => [
-                  <div key={i+'k'} style={{ padding:'.24rem .6rem .24rem 0', fontSize:'.55rem', letterSpacing:'.07em', textTransform:'uppercase', color:'var(--ink-muted)', borderBottom:'1px solid var(--line-soft)', whiteSpace:'nowrap' }}>{t.trait_type}</div>,
-                  <div key={i+'v'} style={{ padding:'.24rem 0', fontSize:'.72rem', fontWeight:700, letterSpacing:'-.01em', borderBottom:'1px solid var(--line-soft)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={t.value}>{t.value}</div>,
+                  <div key={i+'k'} style={{ padding:'.24rem .6rem .24rem 0', fontSize:'.7rem', letterSpacing:'.07em', textTransform:'uppercase', color:'var(--ink-muted)', borderBottom:'1px solid var(--line-soft)', whiteSpace:'nowrap' }}>{t.trait_type}</div>,
+                  <div key={i+'v'} style={{ padding:'.24rem 0', fontSize:'.88rem', fontWeight:700, letterSpacing:'-.01em', borderBottom:'1px solid var(--line-soft)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={t.value}>{t.value}</div>,
                 ])}
               </div>
 
@@ -767,11 +772,11 @@ function EngineInner() {
               {hasFrames && (
                 <div style={{ display:'flex', gap:'.3rem', marginBottom:'.7rem', flexWrap:'wrap' }}>
                   <button
-                    style={{ ...S.btn, flex:1, fontSize:'.65rem', padding:'.55rem' }}
+                    style={{ ...S.btn, flex:1, fontSize:'.82rem', padding:'.65rem' }}
                     onClick={shareSprite}
                   >𝕏 Tweet</button>
                   <button
-                    style={{ ...S.btn, ...(savedUrl ? S.dis : {}), flex:1, fontSize:'.65rem', padding:'.55rem' }}
+                    style={{ ...S.btn, ...(savedUrl ? S.dis : {}), flex:1, fontSize:'.82rem', padding:'.65rem' }}
                     onClick={saveToGallery} disabled={uploading||!!savedUrl}
                   >{uploading ? 'Saving…' : savedUrl ? '✓ Saved' : '+ Gallery'}</button>
                 </div>
@@ -791,7 +796,7 @@ function EngineInner() {
               {hasFrames && (
                 <div style={{ position:'relative', marginBottom:'.7rem' }}>
                   <button
-                    style={{ ...S.btn, width:'100%', justifyContent:'space-between', fontSize:'.65rem', padding:'.55rem .84rem' }}
+                    style={{ ...S.btn, width:'100%', justifyContent:'space-between', fontSize:'.82rem', padding:'.65rem .84rem' }}
                     onClick={() => setDlOpen(o => !o)}
                   >
                     <span>↓ Download</span>

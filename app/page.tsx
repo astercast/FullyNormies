@@ -33,36 +33,31 @@ function HeroSprite({ id, label }: { id: number; label?: string }) {
         ctx.fillStyle = PL; ctx.fillRect(0, 0, W, H)
 
         // Draw face at top (32×32)
-        // Sample from ~5% down the source so beard / lower-face rows fill
-        // more of the destination — top hair rows are less important for the body.
         const faceC = document.createElement('canvas'); faceC.width = faceC.height = 32
         const fc = faceC.getContext('2d')!; fc.imageSmoothingEnabled = false
-        const srcW = img.naturalWidth, srcH = img.naturalHeight
-        const cropY = Math.round(srcH * 0.05)   // skip top 5% (~2px in a 40px image)
-        fc.drawImage(img, 0, cropY, srcW, srcH - cropY, 0, 0, 32, 32)
+        fc.drawImage(img, 0, 0, 32, 32)
         const fd = fc.getImageData(0, 0, 32, 32).data
         for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
           const i = (y * 32 + x) * 4
           const lm = 0.2126 * fd[i] + 0.7152 * fd[i + 1] + 0.0722 * fd[i + 2]
           ctx.fillStyle = lm < 128 ? PD : PL
-          ctx.fillRect(24 + x, 4 + y, 1, 1)   // face starts at y=4 (was y=2)
+          ctx.fillRect(24 + x, 2 + y, 1, 1)
         }
 
         // Body at 80px scale (simplified but connected)
-        // All Y coords shifted +2 from legacy version to match face now at y=4
         const cx = 40
-        // Neck (face ends at y=35, neck starts y=36)
-        ctx.fillStyle = PD; ctx.fillRect(cx - 3, 36, 6, 3)
+        // Neck
+        ctx.fillStyle = PD; ctx.fillRect(cx - 3, 34, 6, 3)
         // Shoulders
-        ctx.fillRect(cx - 14, 39, 28, 3)
-        ctx.fillStyle = PL; ctx.fillRect(cx - 12, 39, 24, 1)
+        ctx.fillRect(cx - 14, 37, 28, 3)
+        ctx.fillStyle = PL; ctx.fillRect(cx - 12, 37, 24, 1)
         // Torso
         ctx.fillStyle = PD
-        ctx.fillRect(cx - 11, 42, 22, 1) // top
+        ctx.fillRect(cx - 11, 40, 22, 1) // top
         ctx.fillRect(cx - 11, 60, 22, 1) // bottom
-        ctx.fillRect(cx - 11, 42, 1, 19) // left side
-        ctx.fillRect(cx + 10, 42, 1, 19) // right side
-        ctx.fillStyle = PL; ctx.fillRect(cx - 10, 43, 20, 17) // fill
+        ctx.fillRect(cx - 11, 40, 1, 21) // left side
+        ctx.fillRect(cx + 10, 40, 1, 21) // right side
+        ctx.fillStyle = PL; ctx.fillRect(cx - 10, 41, 20, 19) // fill
         ctx.fillStyle = PD; ctx.fillRect(cx - 9, 52, 18, 1)   // chest seam
         // Belt
         ctx.fillStyle = PD; ctx.fillRect(cx - 12, 61, 24, 3)
@@ -70,27 +65,29 @@ function HeroSprite({ id, label }: { id: number; label?: string }) {
         ctx.fillStyle = PD; ctx.fillRect(cx - 1, 62, 2, 1)
         // Arms
         ctx.fillStyle = PD
-        ctx.fillRect(cx - 19, 40, 6, 16) // left upper+lower
+        ctx.fillRect(cx - 19, 38, 6, 18) // left upper+lower
         ctx.fillRect(cx - 20, 56, 8, 7)  // left hand
         ctx.fillStyle = PL; ctx.fillRect(cx - 19, 56, 6, 5)
         ctx.fillStyle = PD
-        ctx.fillRect(cx + 13, 40, 6, 16) // right
+        ctx.fillRect(cx + 13, 38, 6, 18) // right
         ctx.fillRect(cx + 12, 56, 8, 7)
         ctx.fillStyle = PL; ctx.fillRect(cx + 13, 56, 6, 5)
         // Legs
         ctx.fillStyle = PD
-        ctx.fillRect(cx - 11, 64, 9, 9)  // left thigh
-        ctx.fillRect(cx + 2,  64, 9, 9)  // right thigh
-        ctx.fillRect(cx - 12, 73, 11, 3) // left knee
-        ctx.fillRect(cx + 1,  73, 11, 3) // right knee
-        ctx.fillStyle = PL; ctx.fillRect(cx - 11, 74, 9, 1); ctx.fillRect(cx + 2, 74, 9, 1)
+        ctx.fillRect(cx - 11, 64, 9, 10) // left thigh
+        ctx.fillRect(cx + 2, 64, 9, 10)  // right thigh
+        ctx.fillRect(cx - 12, 74, 11, 3) // left knee
+        ctx.fillRect(cx + 1, 74, 11, 3)
+        ctx.fillStyle = PL; ctx.fillRect(cx - 11, 75, 9, 1); ctx.fillRect(cx + 2, 75, 9, 1)
+        ctx.fillStyle = PD
+        ctx.fillRect(cx - 11, 77, 9, 0) // calf stub
         // Shoes
         ctx.fillStyle = PD
-        ctx.fillRect(cx - 15, 73, 13, 5)
-        ctx.fillRect(cx + 2,  73, 13, 5)
+        ctx.fillRect(cx - 15, 74, 13, 6)
+        ctx.fillRect(cx + 2, 74, 13, 6)
         ctx.fillStyle = PL
-        ctx.fillRect(cx - 13, 74, 9, 2)
-        ctx.fillRect(cx + 4,  74, 9, 2)
+        ctx.fillRect(cx - 13, 75, 9, 2)
+        ctx.fillRect(cx + 4, 75, 9, 2)
 
         // Snap to strict palette
         const id2 = ctx.getImageData(0, 0, W, H), p = id2.data
@@ -154,12 +151,12 @@ function HeroStrip() {
 
 export default function Home() {
   const features = [
-    { n: '01', title: 'Trait-aware bodies',     body: 'Reads on-chain metadata. All 4 types — Human, Cat, Alien, Agent — each get distinct proportions, clothing, and extras.' },
+    { n: '01', title: 'Trait-aware bodies',     body: '8 pose types: Idle, Walk, Run, Jump, Attack, Hurt, Crouch, Death. Every Normie gets a unique build, outfit, and proportions driven by their on-chain traits.' },
     { n: '02', title: 'Real face compositing',  body: 'Your Normie\'s actual 40×40 face is pixel-sampled and composited onto the body. Every sunglass, beard, and mask preserved exactly.' },
-    { n: '03', title: 'Strict 2-color palette', body: 'Every pixel snapped to #e3e5e4 / #48494b via Bayer dithering. No gradients, no blur — pure Normies-style monochrome.' },
-    { n: '04', title: '4-pose sprite sheets',   body: 'Generate Idle, Walk, Attack, and Crouch in one click. Export as a game-ready 480×120 sprite sheet.' },
+    { n: '03', title: 'Strict 2-color palette', body: 'Every pixel snapped to #e3e5e4 / #48494b. No gradients, no blur — pure Normies-style monochrome at every scale.' },
+    { n: '04', title: '8-pose sprite sheets',   body: 'Two rows of 4: movement (Idle/Walk/Run/Jump) + action (Attack/Hurt/Crouch/Death). Export as a game-ready 2×4 sprite sheet.' },
     { n: '05', title: 'Community gallery',      body: 'Every saved sprite enters the public gallery. Browse, download at any size, and jump to any Normie\'s archive page.' },
-    { n: '06', title: 'Game-ready exports',     body: 'Download at 120, 480, or 960px. Transparent or solid background. Nearest-neighbor — zero quality loss at any scale.' },
+    { n: '06', title: 'Game-ready exports',     body: 'Download at native 40px, 2×, or 4× scale. Transparent or solid background. Nearest-neighbor — zero quality loss.' },
   ]
 
   return (
