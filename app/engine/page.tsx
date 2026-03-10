@@ -1,141 +1,287 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Nav from '../components/Nav'
 import Footer from '../components/Footer'
 import { Suspense } from 'react'
 
-// ══════════════════════════════════════════════════════════════
-//  FULLNORMIES SPRITE ENGINE v8  — AI-powered via fal.ai
+// -------------------------------------------------------------------------------
+//  FULLNORMIES SPRITE ENGINE v9  - Pure Canvas Edition
 //
-//  Pipeline:
-//    1. User loads a Normie (0-9999) → face image + traits fetched
-//    2. Click Generate → POST /api/generate → fal.ai FLUX + pixel LoRA
-//       4 poses generated in PARALLEL (idle, walk, attack, crouch)
-//    3. Each returned image snapped to 2-color Normies palette
-//    4. 4 frames assembled into 480×120 sprite sheet canvas
-//    5. Download: individual frames at 120/480/960px, full sprite sheet
+//  How it works:
+//    1. Fetch 1600-char pixel string from api.normies.art/normie/:id/pixels
+//    2. Extract the real Normie head (rows 0-27 of the 40x40 bitmap)
+//    3. Procedurally draw a full body below:  torso ? arms ? hands ? legs ? feet
+//       All body parts reference traits (type, gender, age, accessory) for shape
+//    4. Compose into 40x72 canvas (head 28px tall + body 44px tall)
+//    5. Generate 4 pose variants by translating/rotating limbs
+//    6. Upscale to crisp display (4x = 160x288) with nearest-neighbor
 //
-//  Palette: PL=#e3e5e4 (light) / PD=#48494b (dark)
-//  FAL_KEY lives in Vercel env — never exposed client-side
-// ══════════════════════════════════════════════════════════════
+//  Palette: PL=#e3e5e4  PD=#48494b  (exact Normies on-chain colors)
+//  Zero AI, zero API keys, infinite free runs.
+// -------------------------------------------------------------------------------
 
-const PL    = '#e3e5e4'
-const PD    = '#48494b'
-const PL_V: [number,number,number] = [0xe3,0xe5,0xe4]
-const PD_V: [number,number,number] = [0x48,0x49,0x4b]
+// -- Palette -----------------------------------------------------------------
+const PL: [number,number,number] = [0xe3,0xe5,0xe4]  // light gray
+const PD: [number,number,number] = [0x48,0x49,0x4b]  // dark charcoal
 
-type Pose  = 'idle'|'walk'|'attack'|'crouch'
-const POSES: Pose[]     = ['idle','walk','attack','crouch']
-const POSE_LABEL        = { idle:'Idle', walk:'Walk', attack:'Attack', crouch:'Crouch' }
+// Native sprite dimensions
+const SW  = 40  // sprite width (matches Normie head width)
+const SH  = 72  // sprite height (28 head + 44 body)
+const HR  = 28  // head rows from the 40x40 Normie bitmap
+const SCL = 5   // display upscale (40x72 -> 200x360)
 
-interface Trait { key:string; value:string }
-type FaceGrid = Uint8Array
-
-function toErrorMessage(err: unknown, fallback: string) {
-  return err instanceof Error ? err.message : fallback
+type Pose = 'idle' | 'walk' | 'attack' | 'crouch'
+const POSES: Pose[] = ['idle', 'walk', 'attack', 'crouch']
+const POSE_LABEL: Record<Pose,string> = {
+  idle: 'Idle', walk: 'Walk', attack: 'Attack', crouch: 'Crouch'
 }
 
-// ── Palette snap ───────────────────────────────────────────────
-//  Loads a remote image URL → draws 120×120 → snaps every pixel to 2-color
-function snapToPalette(url: string, contrastBias = 0): Promise<HTMLCanvasElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      const c   = document.createElement('canvas')
-      c.width   = 120; c.height = 120
-      const ctx = c.getContext('2d')!
-      ctx.imageSmoothingEnabled = false
-      ctx.fillStyle = PL
-      ctx.fillRect(0, 0, 120, 120)
-      ctx.drawImage(img, 0, 0, 120, 120)
+interface TraitAttr { trait_type: string; value: string }
+interface TraitsData { attributes: TraitAttr[] }
 
-      const id = ctx.getImageData(0, 0, 120, 120), p = id.data
-      const thr = 128 + contrastBias * 16   // bias adjusts snap threshold
-      for (let i = 0; i < p.length; i += 4) {
-        const lm = 0.2126*p[i] + 0.7152*p[i+1] + 0.0722*p[i+2]
-        const v  = lm > thr ? PL_V : PD_V
-        p[i]=v[0]; p[i+1]=v[1]; p[i+2]=v[2]; p[i+3]=255
-      }
-      ctx.putImageData(id, 0, 0)
-      resolve(c)
-    }
-    img.onerror = () => reject(new Error(`Failed to load image: ${url}`))
-    img.src = url
-  })
+function tv(traits: TraitsData | null, key: string): string {
+  if (!traits) return ''
+  const attr = traits.attributes.find(a => a.trait_type.toLowerCase() === key.toLowerCase())
+  return (attr?.value ?? '').toLowerCase()
 }
 
-// Preserve the exact 40x40 Normie head by resampling it once and pasting it onto each pose.
-function sampleFaceGrid(url: string): Promise<FaceGrid> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      const c = document.createElement('canvas')
-      c.width = 40
-      c.height = 40
-      const ctx = c.getContext('2d')!
-      ctx.imageSmoothingEnabled = false
-      ctx.drawImage(img, 0, 0, 40, 40)
-
-      const p = ctx.getImageData(0, 0, 40, 40).data
-      const grid = new Uint8Array(40 * 40)
-      for (let i = 0; i < grid.length; i++) {
-        const pi = i * 4
-        if (p[pi + 3] < 40) {
-          grid[i] = 0
-          continue
-        }
-        const lm = 0.2126 * p[pi] + 0.7152 * p[pi + 1] + 0.0722 * p[pi + 2]
-        grid[i] = lm < 140 ? 1 : 0
-      }
-      resolve(grid)
-    }
-    img.onerror = () => reject(new Error(`Failed to sample face from image: ${url}`))
-    img.src = url
-  })
-}
-
-function pasteFaceGrid(canvas: HTMLCanvasElement, faceGrid: FaceGrid) {
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  const id = ctx.getImageData(40, 2, 40, 40)
-  const p = id.data
-  for (let i = 0; i < faceGrid.length; i++) {
-    const pi = i * 4
-    const v = faceGrid[i] === 1 ? PD_V : PL_V
-    p[pi] = v[0]
-    p[pi + 1] = v[1]
-    p[pi + 2] = v[2]
-    p[pi + 3] = 255
+// -- Canvas pixel helpers -----------------------------------------------------
+function createSprite(): { canvas: HTMLCanvasElement; px: (x:number,y:number,d:boolean)=>void; flush:()=>void } {
+  const canvas = document.createElement('canvas')
+  canvas.width = SW; canvas.height = SH
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = `rgb(${PL[0]},${PL[1]},${PL[2]})`
+  ctx.fillRect(0, 0, SW, SH)
+  const imgData = ctx.getImageData(0, 0, SW, SH)
+  const px = (x: number, y: number, dark: boolean) => {
+    if (x < 0 || x >= SW || y < 0 || y >= SH) return
+    const i = (y * SW + x) * 4
+    const c = dark ? PD : PL
+    imgData.data[i]=c[0]; imgData.data[i+1]=c[1]; imgData.data[i+2]=c[2]; imgData.data[i+3]=255
   }
-  ctx.putImageData(id, 40, 2)
+  const flush = () => ctx.putImageData(imgData, 0, 0)
+  return { canvas, px, flush }
 }
 
-// ── Build 480×120 sprite sheet from 4 pose canvases ───────────
-function makeSheet(frames: (HTMLCanvasElement|null)[]): HTMLCanvasElement {
-  const sheet   = document.createElement('canvas')
-  sheet.width   = 480; sheet.height = 120
-  const ctx     = sheet.getContext('2d')!
+// Fill a solid rect of pixels
+function rect(set:(x:number,y:number,d:boolean)=>void, x:number,y:number,w:number,h:number,dark:boolean) {
+  for (let dy=0;dy<h;dy++) for (let dx=0;dx<w;dx++) set(x+dx,y+dy,dark)
+}
+
+// =============================================================================
+//  Body layout constants (all in native sprite pixels)
+// =============================================================================
+const TORSO_X  = 14   // left edge of 12px torso (centered in 40px)
+const TORSO_W  = 12
+const TORSO_Y  = HR   // 28 -- right below head
+const TORSO_H  = 20   // rows 28-47 in idle
+const ARM_H    = 9    // arm segment length in pixels
+const LEG_W    = 4
+const FOOT_W   = 6
+const FOOT_H   = 3
+const NORMAL_LEG_H = 14
+
+// Pose configuration: offsets that animate the limbs
+interface PoseCfg {
+  torsoSquash: number   // compress torso by N px (crouch only)
+  torsoShift:  number   // push torso down by N px (crouch only)
+  lArmDx: number        // left arm x tip offset (neg=back, pos=forward)
+  lArmDy: number        // left arm y tip offset (neg=up, pos=angled)
+  rArmDx: number
+  rArmDy: number
+  lLegDx: number        // left leg foot x drift
+  rLegDx: number
+  legH:   number
+}
+
+const POSE_CFG: Record<Pose, PoseCfg> = {
+  idle:   { torsoSquash:0, torsoShift:0, lArmDx: 0, lArmDy:0, rArmDx: 0, rArmDy:0, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+  walk:   { torsoSquash:0, torsoShift:0, lArmDx:-5, lArmDy:-3, rArmDx: 5, rArmDy:-3, lLegDx:-3, rLegDx: 3, legH:NORMAL_LEG_H },
+  attack: { torsoSquash:0, torsoShift:0, lArmDx:-5, lArmDy: 0, rArmDx:10, rArmDy:-2, lLegDx:-2, rLegDx: 2, legH:NORMAL_LEG_H },
+  crouch: { torsoSquash:5, torsoShift:3, lArmDx:-3, lArmDy: 4, rArmDx: 3, rArmDy: 4, lLegDx:-3, rLegDx: 3, legH:8 },
+}
+
+// =============================================================================
+//  drawNormie: compose head pixels + procedural body into a SW x SH sprite
+// =============================================================================
+function drawNormie(pixels: string, traits: TraitsData, pose: Pose): HTMLCanvasElement {
+  const { canvas, px, flush } = createSprite()
+  const set = px
+  const cfg  = POSE_CFG[pose]
+
+  const normType  = tv(traits, 'type')
+  const gender    = tv(traits, 'gender')
+  const age       = tv(traits, 'age')
+  const accessory = tv(traits, 'accessory')
+
+  const isAgent  = normType === 'agent'
+  const isCat    = normType === 'cat'
+  const isAlien  = normType === 'alien'
+  const isFemale = gender.includes('female')
+  const isOld    = age.includes('old')
+
+  // Body width varies by type
+  const bW = isAlien ? 10 : isAgent ? 13 : 12
+  const bX = Math.floor((SW - bW) / 2)        // left edge of torso
+  const cx = Math.floor(SW / 2)               // center column
+
+  // ── HEAD: stamp exact 40x40 Normie pixels (rows 0..HR-1) ─────────────────
+  for (let r = 0; r < HR; r++)
+    for (let c = 0; c < SW; c++)
+      if (pixels[r * SW + c] === '1') set(c, r, true)
+
+  // ── NECK ─────────────────────────────────────────────────────────────────
+  const neckW = isAlien ? 3 : 5
+  const neckX = Math.floor((SW - neckW) / 2)
+  // Neck bridges gap between head bottom and torso top
+  rect(set, neckX, HR - 2, neckW, 5, true)
+
+  // ── TORSO ─────────────────────────────────────────────────────────────────
+  const tY = TORSO_Y + cfg.torsoShift
+  const tH = TORSO_H - cfg.torsoSquash
+
+  if (isAgent) {
+    rect(set, bX, tY, bW, tH, true)        // dark suit fill
+    const shirtX = cx - 1
+    for (let y=tY; y<tY+tH-2; y++) { set(shirtX, y, false); set(shirtX+1, y, false) }
+    set(shirtX,   tY+2, true); set(shirtX+1, tY+2, true)  // tie knot
+    set(bX+1, tY+1, false); set(bX+bW-2, tY+1, false)     // lapels
+    set(bX+2, tY+3, false)                                  // pocket square
+  } else {
+    rect(set, bX, tY, bW, tH, true)             // outer dark fill
+    if (bW > 2 && tH > 4)
+      rect(set, bX+1, tY+1, bW-2, tH-4, false) // inner shirt fill
+    // Neckline
+    if (isFemale) {
+      set(cx-1, tY, true); set(cx, tY, true)
+      set(cx-2, tY+1, true); set(cx+1, tY+1, true)
+    } else {
+      set(cx-1, tY, true); set(cx, tY, true)
+    }
+    // Belt
+    if (!isAlien) {
+      const beltY = tY + tH - 4
+      for (let x=bX; x<bX+bW; x++) set(x, beltY, true)
+    }
+    // Cat chest stripe
+    if (isCat)
+      for (let y=tY+2; y<tY+tH-4; y++) set(cx, y, true)
+  }
+
+  // ── ARMS (parametric line from shoulder to tip) ───────────────────────────
+  // Each arm is drawn as a 2-pixel-wide segment strip curving from shoulder
+  // in the direction given by (dx, dy) offsets in PoseCfg.
+  const shoulderY = tY + 2
+  const lSX = bX - 2     // left shoulder attach x
+  const rSX = bX + bW + 1  // right shoulder attach x
+  const armSteps = ARM_H
+
+  function drawArm(sx: number, dx: number, dy: number, rightFacing: boolean) {
+    for (let s=0; s<armSteps; s++) {
+      const t  = s / (armSteps - 1)
+      const ax = Math.round(sx + dx * t)
+      const ay = shoulderY + s + Math.round(dy * t)
+      set(ax, ay, true)
+      set(ax + (rightFacing ? 1 : -1), ay, true)
+      if (s > 0 && s < armSteps-1) set(ax, ay, false) // inner highlight
+    }
+    // Hand
+    const hx = Math.round(sx + dx) + (rightFacing ? 0 : -3)
+    const hy = shoulderY + armSteps + Math.round(dy)
+    rect(set, hx, hy, 4, 3, true)
+    // Fist detail on strong punch
+    if (Math.abs(dx) > 7) {
+      const kx = rightFacing ? hx+3 : hx
+      set(kx, hy, false); set(kx, hy+1, false)
+    }
+  }
+
+  drawArm(lSX, cfg.lArmDx, cfg.lArmDy, false)
+  drawArm(rSX, cfg.rArmDx, cfg.rArmDy, true)
+
+  // ── LEGS + FEET ───────────────────────────────────────────────────────────
+  const hipY = tY + tH
+  rect(set, bX, hipY, bW, 2, true)  // hip crossbar
+
+  const lLegX = bX + 2             // 16
+  const rLegX = bX + bW - LEG_W - 2  // 22
+
+  function drawLeg(baseX: number, xDrift: number, lh: number, leftSide: boolean) {
+    for (let s=0; s<lh; s++) {
+      const t  = s / Math.max(lh-1, 1)
+      const lx = Math.round(baseX + xDrift * t)
+      const ly = hipY + 2 + s
+      rect(set, lx, ly, LEG_W, 1, true)
+      if (LEG_W > 2) { set(lx+1, ly, false); if (LEG_W > 3) set(lx+2, ly, false) }
+      if (s === Math.floor(lh/2)) { set(lx, ly, true); set(lx+LEG_W-1, ly, true) } // knee
+    }
+    // Foot
+    const fx = Math.round(baseX + xDrift) + (leftSide ? -1 : 0)
+    const fy = hipY + 2 + lh
+    rect(set, fx, fy, FOOT_W, FOOT_H, true)
+    set(fx+1, fy, false); set(fx+2, fy, false) // shoe highlight
+  }
+
+  drawLeg(lLegX, cfg.lLegDx, cfg.legH, true)
+  drawLeg(rLegX, cfg.rLegDx, cfg.legH, false)
+
+  // ── ACCESSORIES (body portion) ────────────────────────────────────────────
+  if (accessory.includes('chain') || accessory.includes('necklace')) {
+    const cy = tY + 3
+    for (let x=cx-2; x<=cx+2; x++) set(x, cy, true)
+  }
+
+  if (isOld && (pose === 'idle' || pose === 'walk')) {
+    // Walking cane
+    const caneX = bX + bW + 2
+    const caneTop = shoulderY
+    const caneBot = Math.min(hipY + 2 + cfg.legH + FOOT_H, SH-2)
+    for (let y=caneTop; y<=caneBot; y++) set(caneX, y, true)
+    set(caneX-1, caneTop, true); set(caneX+1, caneTop, true)  // handle
+    set(caneX-1, caneBot, true); set(caneX+1, caneBot, true)  // foot
+  }
+
+  flush()
+  return canvas
+}
+
+// -- Upscale a native sprite canvas to display size -------------------------
+function upscale(src: HTMLCanvasElement, scale: number): HTMLCanvasElement {
+  const out = document.createElement('canvas')
+  out.width  = src.width  * scale
+  out.height = src.height * scale
+  const ctx = out.getContext('2d')!
   ctx.imageSmoothingEnabled = false
-  ctx.fillStyle = PL
-  ctx.fillRect(0, 0, 480, 120)
-  // Fill any missing frames with copies of the first available frame
+  ctx.drawImage(src, 0, 0, out.width, out.height)
+  return out
+}
+
+// -- Build 4-frame sprite sheet (horizontal strip) --------------------------
+function makeSheet(frames: (HTMLCanvasElement|null)[]): HTMLCanvasElement {
   const first = frames.find(Boolean)
+  const fw = first?.width  ?? SW * SCL
+  const fh = first?.height ?? SH * SCL
+  const sheet = document.createElement('canvas')
+  sheet.width  = fw * 4
+  sheet.height = fh
+  const ctx = sheet.getContext('2d')!
+  ctx.imageSmoothingEnabled = false
+  ctx.fillStyle = `rgb(${PL[0]},${PL[1]},${PL[2]})`
+  ctx.fillRect(0, 0, sheet.width, sheet.height)
   frames.forEach((f, i) => {
     const src = f ?? first
-    if (src) ctx.drawImage(src, i * 120, 0, 120, 120)
+    if (src) ctx.drawImage(src, i * fw, 0)
   })
   return sheet
 }
 
-// ── Download a canvas at given scale ──────────────────────────
+// -- Download a canvas as PNG ------------------------------------------------
 function dlCanvas(src: HTMLCanvasElement, filename: string, scale = 1) {
-  const out   = document.createElement('canvas')
-  out.width   = src.width  * scale
-  out.height  = src.height * scale
-  const ctx   = out.getContext('2d')!
+  const out = document.createElement('canvas')
+  out.width  = src.width  * scale
+  out.height = src.height * scale
+  const ctx  = out.getContext('2d')!
   ctx.imageSmoothingEnabled = false
   ctx.drawImage(src, 0, 0, out.width, out.height)
   out.toBlob(b => {
@@ -146,7 +292,7 @@ function dlCanvas(src: HTMLCanvasElement, filename: string, scale = 1) {
   }, 'image/png')
 }
 
-// ── Minimal style tokens ───────────────────────────────────────
+// -- Style tokens ------------------------------------------------------------
 const S = {
   btn: {
     background:'transparent', border:'1px solid var(--line)', color:'var(--ink)',
@@ -154,260 +300,173 @@ const S = {
     textTransform:'uppercase' as const, padding:'.44rem .84rem', cursor:'pointer',
     display:'inline-flex', alignItems:'center', justifyContent:'center', gap:'.3rem',
     userSelect:'none' as const, WebkitTapHighlightColor:'transparent',
-  },
-  fill: { background:'var(--ink)', color:'var(--bg)', borderColor:'var(--ink)' },
-  dis:  { opacity:0.38, cursor:'not-allowed' as const, pointerEvents:'none' as const },
+  } as React.CSSProperties,
+  fill: { background:'var(--ink)', color:'var(--bg)', borderColor:'var(--ink)' } as React.CSSProperties,
+  dis:  { opacity:0.38, cursor:'not-allowed' as const, pointerEvents:'none' as const } as React.CSSProperties,
   lbl:  {
     fontSize:'.6rem', letterSpacing:'.13em', textTransform:'uppercase' as const,
     color:'var(--ink-muted)', display:'block', marginBottom:'.3rem',
-  },
-  frame: {
-    width:'100%', maxWidth:200, aspectRatio:'1' as const,
-    background:'#e3e5e4', border:'1px solid var(--line)',
-    display:'flex', alignItems:'center', justifyContent:'center',
-    marginBottom:'1.1rem', overflow:'hidden',
-  },
+  } as React.CSSProperties,
 }
 
-// ── Single pose thumbnail card ─────────────────────────────────
-function PoseThumb({ pose, canvas, active, onClick }: {
-  pose:Pose; canvas:HTMLCanvasElement|null; active:boolean; onClick:()=>void
+// -- Pose card ----------------------------------------------------------------
+function PoseCard({ pose, canvas, active, onClick }: {
+  pose: Pose; canvas: HTMLCanvasElement | null; active: boolean; onClick: () => void
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
-    if (ref.current && canvas) {
-      const el = ref.current
-      el.width = el.height = 120
-      el.getContext('2d')!.drawImage(canvas, 0, 0)
-    }
+    const el = ref.current
+    if (!el || !canvas) return
+    el.width  = canvas.width
+    el.height = canvas.height
+    const ctx = el.getContext('2d')!
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(canvas, 0, 0)
   }, [canvas])
 
+  const w = SW * SCL
+  const h = SH * SCL
+
   return (
-    <button onClick={onClick} style={{
-      ...S.btn, padding:0, flexDirection:'column' as const, overflow:'hidden',
-      border: active ? '2px solid var(--ink)' : '1px solid var(--line)',
-      ...(active ? S.fill : {}),
-    }}>
-      <div style={{ width:'100%', aspectRatio:'1', background:'#e3e5e4', position:'relative' }}>
-        {canvas
-          ? <canvas ref={ref} width={120} height={120}
-              style={{ width:'100%', height:'100%', imageRendering:'pixelated', display:'block' }} />
-          : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', opacity:.2 }}>
-              <span style={{ fontSize:'1.5rem' }}>▦</span>
-            </div>
-        }
+    <button
+      onClick={onClick}
+      style={{
+        ...S.btn,
+        flexDirection:'column', padding:0, overflow:'hidden',
+        border: active ? '2px solid var(--ink)' : '1px solid var(--line)',
+        background: active ? 'var(--ink)' : 'transparent',
+      }}
+    >
+      <div style={{ width:'100%', background:'#e3e5e4', aspectRatio: `${w}/${h}` }}>
+        {canvas ? (
+          <canvas
+            ref={ref}
+            width={w} height={h}
+            style={{ width:'100%', height:'100%', imageRendering:'pixelated', display:'block' }}
+          />
+        ) : (
+          <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', opacity:.18 }}>
+            <span style={{ fontSize:'1.5rem' }}>?</span>
+          </div>
+        )}
       </div>
-      <span style={{ fontSize:'.48rem', letterSpacing:'.1em', padding:'.28rem', display:'block', width:'100%', textAlign:'center' }}>
+      <span style={{
+        fontSize:'.48rem', letterSpacing:'.1em', padding:'.28rem', display:'block',
+        width:'100%', textAlign:'center', color: active ? 'var(--bg)' : 'var(--ink)',
+      }}>
         {POSE_LABEL[pose]}
       </span>
     </button>
   )
 }
 
-// ════════════════════════════════════════════════════════════════
+// ----------------------------------------------------------------------------
 //  MAIN PAGE
-// ════════════════════════════════════════════════════════════════
+// ----------------------------------------------------------------------------
 function EngineInner() {
-  const searchParams = useSearchParams()
-  const router       = useRouter()
+  const params = useSearchParams()
+  const router = useRouter()
 
-  // Normie data
-  const [tokenInput,  setTokenInput]  = useState('')
-  const [loadState,   setLoadState]   = useState<'idle'|'loading'|'done'|'error'>('idle')
-  const [loadErr,     setLoadErr]     = useState('')
-  const [currentId,   setCurrentId]   = useState<number|null>(null)
-  const [normName,    setNormName]    = useState('')
-  const [traits,      setTraits]      = useState<Trait[]>([])
-  const [faceUrl,     setFaceUrl]     = useState<string|null>(null)     // blob for display
-  const [faceApiUrl,  setFaceApiUrl]  = useState<string|null>(null)     // direct url for fal
-  const [faceGrid,    setFaceGrid]    = useState<FaceGrid|null>(null)
+  const [tokenInput, setTokenInput] = useState('')
+  const [loadState,  setLoadState]  = useState<'idle'|'loading'|'done'|'error'>('idle')
+  const [loadErr,    setLoadErr]    = useState('')
+  const [currentId,  setCurrentId]  = useState<number|null>(null)
+  const [normName,   setNormName]   = useState('')
+  const [normTraits, setNormTraits] = useState<TraitsData|null>(null)
 
-  // Generation
-  type GenState = 'idle'|'calling'|'snapping'|'done'|'error'
-  const [genState,    setGenState]    = useState<GenState>('idle')
-  const [genErr,      setGenErr]      = useState('')
-  const [genProgress, setGenProgress] = useState(0)   // 0-100
-  const [seed,        setSeed]        = useState<number|null>(null)
-  const [contrast,    setContrast]    = useState(0)
-  // Store raw fal URLs so we can re-snap without re-generating
-  const rawUrls = useRef<Record<Pose,string|null>>({ idle:null, walk:null, attack:null, crouch:null })
+  // Raw pixel string (1600 chars) from API
+  const [pixels,    setPixels]   = useState<string|null>(null)
 
-  // Output canvases — one per pose
-  const [frames, setFrames]       = useState<Record<Pose,HTMLCanvasElement|null>>({
+  // Generated canvases per pose (already upscaled)
+  const [frames,    setFrames]   = useState<Record<Pose, HTMLCanvasElement|null>>({
     idle:null, walk:null, attack:null, crouch:null,
   })
-  const [sheet,  setSheet]        = useState<HTMLCanvasElement|null>(null)
+  const [sheet,     setSheet]    = useState<HTMLCanvasElement|null>(null)
   const [activePose, setActivePose] = useState<Pose>('idle')
 
-  // Gallery
   const [uploading, setUploading] = useState(false)
   const [savedUrl,  setSavedUrl]  = useState<string|null>(null)
   const [shareOpen, setShareOpen] = useState(false)
 
-  const hasFrames   = POSES.some(p => frames[p])
-  const allFrames   = POSES.every(p => frames[p])
-  const isGenerating = genState === 'calling' || genState === 'snapping'
-  const canGenerate  = !!faceApiUrl && !isGenerating
+  const hasFrames = POSES.some(p => frames[p])
 
-  const wait = (ms:number) => new Promise<void>(r => setTimeout(r,ms))
-
-  // ── Auto-load from URL param ──────────────────────────────────
+  // Auto-load from URL
   useEffect(() => {
-    const id = searchParams.get('id')
-    if (id) { setTokenInput(id); setTimeout(() => loadById(parseInt(id)), 250) }
+    const id = params.get('id')
+    if (id) { setTokenInput(id); setTimeout(() => loadById(parseInt(id)), 100) }
   }, [])
 
-  // ── Load a Normie ─────────────────────────────────────────────
+  // -- Load a Normie ---------------------------------------------------------
   async function loadById(id: number) {
     if (isNaN(id) || id < 0 || id > 9999) return
     setLoadState('loading'); setLoadErr('')
-    setTraits([]); setNormName(''); setFaceUrl(null); setFaceApiUrl(null); setFaceGrid(null)
-    setSavedUrl(null); setCurrentId(id); setGenState('idle')
+    setNormName(''); setNormTraits(null); setPixels(null)
+    setSavedUrl(null); setCurrentId(id)
     setFrames({ idle:null, walk:null, attack:null, crouch:null }); setSheet(null)
-    rawUrls.current = { idle:null, walk:null, attack:null, crouch:null }
     router.replace(`/engine?id=${id}`, { scroll:false })
 
     try {
-      // Fetch metadata
-      const mRes = await fetch(`https://api.normies.art/normie/${id}/metadata`, { cache:'no-store' })
-      if (!mRes.ok) throw new Error(`Normie #${id} not found (${mRes.status})`)
-      const mData = await mRes.json()
-      const parsed: Trait[] = []
-      if (Array.isArray(mData.attributes))
-        mData.attributes.forEach((a: Record<string, unknown>) => {
-          if (a.trait_type && a.value != null)
-            parsed.push({ key:String(a.trait_type), value:String(a.value) })
-        })
-      setTraits(parsed)
-      setNormName(mData.name || `Normie #${id}`)
+      const res  = await fetch('/api/generate', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ normieId: id }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Failed to load')
 
-      // Load face image
-      const imgUrl = `https://api.normies.art/normie/${id}/image.png`
-      setFaceApiUrl(imgUrl)
-      const imgRes = await fetch(imgUrl, { cache:'no-store' })
-      if (imgRes.ok) {
-        const blob = await imgRes.blob()
-        const objectUrl = URL.createObjectURL(blob)
-        setFaceUrl(objectUrl)
-        const sampled = await sampleFaceGrid(objectUrl).catch(() => null)
-        setFaceGrid(sampled)
-      }
+      const td: TraitsData = data.traits
+      setNormTraits(td)
+      setNormName(`Normie #${id}`)
+      setPixels(data.pixels)
       setLoadState('done')
-    } catch(e: unknown) {
-      setLoadErr(toErrorMessage(e, 'Failed to load'))
+
+      // Auto-generate all poses once loaded
+      generateAll(data.pixels, td)
+    } catch(e) {
+      setLoadErr(e instanceof Error ? e.message : 'Failed to load')
       setLoadState('error')
     }
   }
 
-  // ── Generate all 4 poses via AI ───────────────────────────────
-  async function generate(opts: { newSeed?:boolean } = {}) {
-    if (!canGenerate) return
-
-    const s = (opts.newSeed || seed === null)
-      ? ((Math.random() * 0xFFFFFF) | 0)
-      : seed
-    if (opts.newSeed || seed === null) setSeed(s)
-
-    setGenState('calling'); setGenErr(''); setGenProgress(10)
-    setSavedUrl(null)
-    rawUrls.current = { idle:null, walk:null, attack:null, crouch:null }
-
-    // Progress ticker while waiting for fal
-    const ticker = setInterval(() => {
-      setGenProgress(p => p < 82 ? p + 3 : p)
-    }, 700)
-
-    try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({
-          normieImageUrl: faceApiUrl,
-          normieId: currentId,
-          traits,
-          poses: POSES,
-          seed: s,
-        }),
-      })
-
-      clearInterval(ticker)
-      const data = await res.json()
-      if (!res.ok || data.error) {
-        const detailText = Array.isArray(data?.details)
-          ? data.details
-              .map((d: Record<string, unknown>) => `${String(d.pose ?? 'unknown')}: ${String(d.error ?? 'failed')}`)
-              .join(' | ')
-          : ''
-        throw new Error(detailText ? `${data.error || 'Generation failed'}. ${detailText}` : (data.error || 'Generation failed'))
-      }
-
-      // Store raw URLs for re-snapping
-      data.poses.forEach((p:{pose:string;url:string|null}) => {
-        if (p.url) rawUrls.current[p.pose as Pose] = p.url
-      })
-
-      // Snap palette
-      setGenState('snapping'); setGenProgress(88)
-      await applySnap(contrast)
-
-    } catch(e: unknown) {
-      clearInterval(ticker)
-      console.error('[generate]', e)
-      setGenErr(toErrorMessage(e, 'Generation failed'))
-      setGenState('error')
-      setGenProgress(0)
+  // -- Generate all 4 poses --------------------------------------------------
+  const generateAll = useCallback((pix: string, td: TraitsData) => {
+    const newFrames: Record<Pose, HTMLCanvasElement|null> = {
+      idle:null, walk:null, attack:null, crouch:null,
     }
-  }
-
-  // ── Apply palette snap to raw URLs (can re-run with new contrast) ──
-  async function applySnap(cBias: number) {
-    const urls = rawUrls.current
-    const hasSome = Object.values(urls).some(Boolean)
-    if (!hasSome) return
-
-    setGenState('snapping')
-    const newFrames: Record<Pose,HTMLCanvasElement|null> = { idle:null, walk:null, attack:null, crouch:null }
-
-    await Promise.all(POSES.map(async pose => {
-      const url = urls[pose]
-      if (!url) return
-      try {
-        newFrames[pose] = await snapToPalette(url, cBias)
-        if (newFrames[pose] && faceGrid) {
-          pasteFaceGrid(newFrames[pose], faceGrid)
-        }
-      } catch(e) {
-        console.error(`snap failed for ${pose}:`, e)
-      }
-    }))
-
+    POSES.forEach(pose => {
+      const native = drawNormie(pix, td, pose)
+      newFrames[pose] = upscale(native, SCL)
+    })
     setFrames({ ...newFrames })
+    setSheet(makeSheet(POSES.map(p => newFrames[p])))
+  }, [])
 
-    // Build sprite sheet
-    const frameArr = POSES.map(p => newFrames[p])
-    const newSheet = makeSheet(frameArr)
-    setSheet(newSheet)
-
-    setGenState('done'); setGenProgress(100)
-    await new Promise<void>(r => setTimeout(r, 300))
-    setGenProgress(0)
+  function regenerate() {
+    if (pixels && normTraits) generateAll(pixels, normTraits)
   }
 
-  // ── Download helpers ──────────────────────────────────────────
-  function dlFrame(pose: Pose, size: number, transparent = false) {
+  // -- Download helpers ------------------------------------------------------
+  function dlFrame(pose: Pose, scale: number, transparent = false) {
     const c = frames[pose]; if (!c) return
     const out = document.createElement('canvas')
-    out.width = out.height = size
-    const ctx = out.getContext('2d')!
+    out.width  = c.width  * scale
+    out.height = c.height * scale
+    const ctx  = out.getContext('2d')!
     ctx.imageSmoothingEnabled = false
-    if (!transparent) { ctx.fillStyle = PL; ctx.fillRect(0,0,size,size) }
-    ctx.drawImage(c, 0, 0, size, size)
-    dlCanvas(out, `normie-${currentId}-${pose}-${size}px.png`)
+    if (!transparent) { ctx.fillStyle = `rgb(${PL[0]},${PL[1]},${PL[2]})`; ctx.fillRect(0,0,out.width,out.height) }
+    ctx.drawImage(c, 0, 0, out.width, out.height)
+    out.toBlob(b => {
+      const a = Object.assign(document.createElement('a'), {
+        href: URL.createObjectURL(b!),
+        download: `normie-${currentId}-${pose}${transparent?'-transparent':''}-${out.width}px.png`,
+      })
+      a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000)
+    }, 'image/png')
   }
 
-  function dlSheet(scale = 1) {
+  function dlSheet(mul = 1) {
     if (!sheet) return
-    dlCanvas(sheet, `normie-${currentId}-spritesheet${scale > 1 ? `-${scale}x` : ''}.png`, scale)
+    dlCanvas(sheet, `normie-${currentId}-sheet${mul>1?`-${mul}x`:''}.png`, mul)
   }
 
   async function saveToGallery() {
@@ -415,35 +474,31 @@ function EngineInner() {
     setUploading(true)
     try {
       const blob: Blob = await new Promise(res => c.toBlob(b => res(b!), 'image/png'))
+      const traitList = normTraits?.attributes.map(a => ({ key:a.trait_type, value:a.value })) ?? []
       const form = new FormData()
       form.append('file', blob, `normie-${currentId}-${activePose}.png`)
-      form.append('meta', JSON.stringify({ id:currentId, name:normName, traits, pose:activePose }))
+      form.append('meta', JSON.stringify({ id:currentId, name:normName, traits:traitList, pose:activePose }))
       const data = await (await fetch('/api/upload', { method:'POST', body:form })).json()
       if (data.url) setSavedUrl(data.url); else throw new Error()
     } catch { /* silent */ } finally { setUploading(false) }
   }
 
-  const g2: React.CSSProperties = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'.3rem', marginBottom:'.4rem' }
-
-  // Progress bar display
-  const showProgress = isGenerating && genProgress > 0
-  const progressLabel =
-    genState === 'calling'  ? 'Generating 4 poses with AI…' :
-    genState === 'snapping' ? 'Applying Normies palette…' : ''
+  const gd: React.CSSProperties = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'.3rem', marginBottom:'.4rem' }
+  const traitList = normTraits?.attributes.filter(a => !['Level','Pixel Count','Action Points','Customized'].includes(a.trait_type)) ?? []
 
   return (
     <div style={{ display:'flex', flexDirection:'column', minHeight:'100vh' }}>
       <Nav />
       <main style={{ flex:1 }}>
 
-        {/* ── Token input bar ─────────────────────────────────── */}
+        {/* -- Token input ----------------------------------------------------- */}
         <div style={{ borderBottom:'1px solid var(--line)', padding:'1.3rem 0' }}>
           <div style={{ maxWidth:1080, margin:'0 auto', padding:'0 1.25rem' }}>
             <div style={{ display:'flex', alignItems:'flex-end', gap:'.5rem', flexWrap:'wrap' }}>
               <div>
-                <span style={S.lbl}>Token ID — 0 to 9999</span>
+                <span style={S.lbl}>Token ID - 0 to 9999</span>
                 <input
-                  type="number" min={0} max={9999} placeholder="6793"
+                  type="number" min={0} max={9999} placeholder="0"
                   value={tokenInput}
                   onChange={e => setTokenInput(e.target.value)}
                   onKeyDown={e => e.key==='Enter' && tokenInput && loadById(parseInt(tokenInput))}
@@ -460,7 +515,7 @@ function EngineInner() {
                 style={{ ...S.btn, ...S.fill, ...(loadState==='loading'?S.dis:{}) }}
                 disabled={loadState==='loading'}
                 onClick={() => tokenInput && loadById(parseInt(tokenInput))}
-              >{loadState==='loading'?'Loading…':'Load'}</button>
+              >{loadState==='loading'?'Loading-':'Load'}</button>
               <button style={S.btn} onClick={() => {
                 const id = Math.floor(Math.random()*10000)
                 setTokenInput(String(id)); loadById(id)
@@ -468,70 +523,93 @@ function EngineInner() {
             </div>
             {loadErr && (
               <div style={{ marginTop:'.7rem', padding:'.45rem .65rem', border:'1px solid var(--line)', fontSize:'.65rem' }}>
-                ⚠ {loadErr}
+                ? {loadErr}
               </div>
             )}
           </div>
         </div>
 
-        {/* ── Main two-column grid ─────────────────────────────── */}
+        {/* -- Main layout ----------------------------------------------------- */}
         <div style={{ maxWidth:1080, margin:'0 auto', padding:'0 1.25rem' }}>
           <style>{`
             @media(min-width:700px){
-              .fn-grid{grid-template-columns:1fr 1fr !important}
-              .fn-right{border-left:1px solid var(--line) !important;border-top:none !important;padding-left:1.6rem !important}
+              .fn-grid{ grid-template-columns:300px 1fr !important }
+              .fn-right{ border-left:1px solid var(--line) !important; border-top:none !important; padding-left:1.6rem !important }
             }
           `}</style>
           <div className="fn-grid" style={{ display:'grid', gridTemplateColumns:'1fr', borderBottom:'1px solid var(--line)' }}>
 
-            {/* ── LEFT: Original Normie ──────────────────────── */}
+            {/* -- LEFT: Normie info ------------------------------------------ */}
             <div style={{ padding:'1.4rem 0' }}>
-              <div style={{ fontSize:'.58rem', letterSpacing:'.16em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:'1.1rem', display:'flex', alignItems:'center', gap:'.4rem' }}>
-                01 — Original Normie
+              <div style={{
+                fontSize:'.56rem', letterSpacing:'.16em', textTransform:'uppercase',
+                color:'var(--ink-muted)', marginBottom:'1.1rem',
+                display:'flex', alignItems:'center', gap:'.4rem',
+              }}>
+                01 - Original Normie
                 <span style={{ flex:1, height:1, background:'var(--line-soft)', display:'block', opacity:.5 }} />
               </div>
-              <div style={S.frame}>
-                {faceUrl
-                  ? <img src={faceUrl} alt={normName} style={{ width:'100%', height:'100%', imageRendering:'pixelated', objectFit:'contain', display:'block' }} />
-                  : <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'.28rem', color:'#48494b', textAlign:'center' }}>
-                      <div style={{ fontSize:'1.3rem', opacity:.1 }}>◻</div>
-                      <div style={{ fontSize:'.58rem', letterSpacing:'.1em', textTransform:'uppercase' }}>Load a Normie</div>
-                      <div style={{ fontSize:'.5rem', opacity:.55 }}>0 – 9999</div>
-                    </div>
-                }
+
+              {/* Face preview: use the PNG from the public API */}
+              <div style={{
+                width:'100%', maxWidth:180, aspectRatio:'1',
+                background:'#e3e5e4', border:'1px solid var(--line)',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                marginBottom:'1.1rem', overflow:'hidden',
+              }}>
+                {currentId != null && loadState !== 'idle' ? (
+                  <img
+                    src={`https://api.normies.art/normie/${currentId}/image.png`}
+                    alt={normName}
+                    crossOrigin="anonymous"
+                    style={{ width:'100%', height:'100%', imageRendering:'pixelated', objectFit:'contain', display:'block' }}
+                  />
+                ) : (
+                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'.28rem', color:'#48494b', textAlign:'center' }}>
+                    <div style={{ fontSize:'1.5rem', opacity:.1 }}>?</div>
+                    <div style={{ fontSize:'.58rem', letterSpacing:'.1em', textTransform:'uppercase' }}>Load a Normie</div>
+                    <div style={{ fontSize:'.5rem', opacity:.55 }}>0 - 9999</div>
+                  </div>
+                )}
               </div>
-              {normName && <div style={{ fontSize:'1.4rem', fontWeight:900, letterSpacing:'-.05em', lineHeight:1, marginBottom:'.9rem' }}>{normName}</div>}
+
+              {normName && <div style={{ fontSize:'1.3rem', fontWeight:900, letterSpacing:'-.05em', lineHeight:1, marginBottom:'.9rem' }}>{normName}</div>}
+
               <span style={S.lbl}>Traits</span>
               <div style={{ display:'grid', gridTemplateColumns:'auto 1fr' }}>
-                {traits.length === 0
-                  ? <div style={{ gridColumn:'span 2', fontSize:'.65rem', color:'var(--ink-muted)', padding:'.3rem 0' }}>No traits loaded.</div>
-                  : traits.map((t,i) => [
-                      <div key={i+'k'} style={{ padding:'.24rem .75rem .24rem 0', fontSize:'.55rem', letterSpacing:'.07em', textTransform:'uppercase', color:'var(--ink-muted)', borderBottom:'1px solid var(--line-soft)', whiteSpace:'nowrap' }}>{t.key}</div>,
-                      <div key={i+'v'} style={{ padding:'.24rem 0', fontSize:'.72rem', fontWeight:700, letterSpacing:'-.01em', borderBottom:'1px solid var(--line-soft)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={t.value}>{t.value}</div>,
-                    ])
-                }
+                {traitList.length === 0 ? (
+                  <div style={{ gridColumn:'span 2', fontSize:'.65rem', color:'var(--ink-muted)', padding:'.3rem 0' }}>No traits loaded.</div>
+                ) : traitList.map((t,i) => [
+                  <div key={i+'k'} style={{ padding:'.24rem .6rem .24rem 0', fontSize:'.55rem', letterSpacing:'.07em', textTransform:'uppercase', color:'var(--ink-muted)', borderBottom:'1px solid var(--line-soft)', whiteSpace:'nowrap' }}>{t.trait_type}</div>,
+                  <div key={i+'v'} style={{ padding:'.24rem 0', fontSize:'.72rem', fontWeight:700, letterSpacing:'-.01em', borderBottom:'1px solid var(--line-soft)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={t.value}>{t.value}</div>,
+                ])}
               </div>
-              {faceUrl && <>
-                <hr style={{ border:'none', borderTop:'1px solid var(--line-soft)', margin:'.9rem 0' }} />
-                <button style={S.btn} onClick={() => {
-                  const a = Object.assign(document.createElement('a'), { href:faceUrl!, download:`normie-${currentId}-face.png` })
-                  a.click()
-                }}>↓ Download Face PNG</button>
-              </>}
+
+              {loadState === 'done' && (
+                <div style={{ marginTop:'.8rem', fontSize:'.56rem', color:'var(--ink-muted)', lineHeight:1.8 }}>
+                  <strong style={{ color:'var(--ink)', fontSize:'.6rem' }}>Canvas engine active</strong><br/>
+                  Real Normie head pixels - procedural full body<br/>
+                  Instant - free - no AI required
+                </div>
+              )}
             </div>
 
-            {/* ── RIGHT: Sprite Engine ───────────────────────── */}
+            {/* -- RIGHT: Sprite engine --------------------------------------- */}
             <div className="fn-right" style={{ padding:'1.4rem 0', borderTop:'1px solid var(--line)' }}>
-              <div style={{ fontSize:'.58rem', letterSpacing:'.16em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:'1.1rem', display:'flex', alignItems:'center', gap:'.4rem' }}>
-                02 — Full Body Sprite Engine
+              <div style={{
+                fontSize:'.56rem', letterSpacing:'.16em', textTransform:'uppercase',
+                color:'var(--ink-muted)', marginBottom:'1.1rem',
+                display:'flex', alignItems:'center', gap:'.4rem',
+              }}>
+                02 - Full Body Sprite Engine
                 <span style={{ flex:1, height:1, background:'var(--line-soft)', display:'block', opacity:.5 }} />
-                <span style={{ fontSize:'.46rem', opacity:.5, letterSpacing:'.04em', textTransform:'none' as const }}>AI · fal.ai</span>
+                <span style={{ fontSize:'.44rem', opacity:.5, letterSpacing:'.04em', textTransform:'none' as const }}>Canvas - Instant</span>
               </div>
 
-              {/* ── 4-pose grid ───────────────────────────────── */}
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'.35rem', marginBottom:'.9rem' }}>
+              {/* 4 pose cards */}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'.4rem', marginBottom:'1rem' }}>
                 {POSES.map(pose => (
-                  <PoseThumb
+                  <PoseCard
                     key={pose} pose={pose}
                     canvas={frames[pose]}
                     active={activePose===pose}
@@ -540,153 +618,109 @@ function EngineInner() {
                 ))}
               </div>
 
-              {/* ── Progress bar ──────────────────────────────── */}
-              {showProgress && (
-                <div style={{ marginBottom:'.7rem' }}>
-                  <div style={{ fontSize:'.55rem', letterSpacing:'.09em', textTransform:'uppercase', color:'var(--ink-muted)', marginBottom:'.3rem' }}>
-                    {progressLabel}
-                  </div>
-                  <div style={{ height:2, background:'var(--line-soft)' }}>
-                    <div style={{ height:2, background:'var(--ink)', width:`${genProgress}%`, transition:'width .6s ease' }} />
-                  </div>
+              {/* Generate button */}
+              {loadState !== 'done' ? (
+                <div style={{ fontSize:'.62rem', color:'var(--ink-muted)', marginBottom:'.7rem', lineHeight:1.9 }}>
+                  Load a Normie above to generate its full body sprites.<br/>
+                  The real Normie head is used exactly - body is drawn from traits.
+                </div>
+              ) : (
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'.3rem', marginBottom:'.7rem' }}>
+                  <button
+                    style={{ ...S.btn, ...S.fill, gridColumn:'span 2', fontSize:'.65rem', padding:'.6rem' }}
+                    onClick={regenerate}
+                  >? Regenerate Sprites</button>
                 </div>
               )}
 
-              {/* ── Error display ─────────────────────────────── */}
-              {genState==='error' && (
-                <div style={{ padding:'.5rem .65rem', border:'1px solid var(--line)', fontSize:'.62rem', marginBottom:'.6rem', lineHeight:1.7 }}>
-                  ⚠ {genErr}
-                  {genErr.includes('FAL_KEY') && (
-                    <> — <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noreferrer" style={{ color:'var(--ink)' }}>
-                      Get a free key at fal.ai
-                    </a></>
-                  )}
-                </div>
-              )}
-
-              {/* ── Primary generate button ────────────────────── */}
-              <button
-                style={{ ...S.btn, ...S.fill, width:'100%', marginBottom:'.45rem', fontSize:'.65rem', padding:'.6rem', ...(canGenerate?{}:S.dis) }}
-                onClick={() => generate({ newSeed: seed===null })}
-                disabled={!canGenerate}
-              >
-                {isGenerating
-                  ? (genState==='snapping' ? '🎨 Applying palette…' : '⏳ Generating 4 poses…')
-                  : hasFrames ? '↺ Regenerate All Poses' : '▶ Generate Full Body Sprites'
-                }
-              </button>
-
-              {/* ── Controls row ─────────────────────────────── */}
-              {hasFrames && !isGenerating && (
-                <div style={{ ...g2, marginBottom:'.6rem' }}>
-                  <button style={S.btn} onClick={() => generate({ newSeed:true })}>⚂ New Seed</button>
-                  <button style={S.btn} onClick={() => generate()}>↺ Same Seed</button>
-                  <button style={S.btn} onClick={() => { const c2 = Math.min(4,contrast+1); setContrast(c2); applySnap(c2) }}>+ Contrast</button>
-                  <button style={S.btn} onClick={() => { const c2 = Math.max(-4,contrast-1); setContrast(c2); applySnap(c2) }}>− Contrast</button>
-                </div>
-              )}
-
-              {!hasFrames && !isGenerating && faceApiUrl && (
-                <div style={{ fontSize:'.58rem', color:'var(--ink-muted)', marginBottom:'.7rem', lineHeight:1.8 }}>
-                  Powered by FLUX + pixel art LoRA via fal.ai.<br/>
-                  Generates all 4 poses in parallel, then snaps output to the 2-color Normies palette.<br/>
-                  ~8–15 seconds per run.
-                </div>
-              )}
-
-              <hr style={{ border:'none', borderTop:'1px solid var(--line-soft)', margin:'.9rem 0' }} />
-
-              {/* ── Downloads ─────────────────────────────────── */}
-              <span style={S.lbl}>Download</span>
-              {hasFrames ? (<>
-                {/* Active pose single frame */}
-                <div style={{ fontSize:'.55rem', color:'var(--ink-muted)', marginBottom:'.3rem', letterSpacing:'.06em', textTransform:'uppercase' }}>
-                  Active pose: {POSE_LABEL[activePose]}
-                </div>
-                <div style={{ ...g2 }}>
-                  <button style={S.btn} onClick={() => dlFrame(activePose,120)}>↓ 120px</button>
-                  <button style={S.btn} onClick={() => dlFrame(activePose,120,true)}>↓ Transparent</button>
-                  <button style={S.btn} onClick={() => dlFrame(activePose,480)}>↓ 480px</button>
-                  <button style={S.btn} onClick={() => dlFrame(activePose,960)}>↓ 960px</button>
+              {/* Downloads */}
+              {hasFrames && (<>
+                <hr style={{ border:'none', borderTop:'1px solid var(--line-soft)', margin:'.8rem 0' }} />
+                <span style={S.lbl}>Download - Active pose: {POSE_LABEL[activePose]}</span>
+                <div style={gd}>
+                  <button style={S.btn} onClick={() => dlFrame(activePose,1)}>? Native ({SW}-{SH}px)</button>
+                  <button style={S.btn} onClick={() => dlFrame(activePose,1,true)}>? Transparent</button>
+                  <button style={S.btn} onClick={() => dlFrame(activePose,2)}>? 2- ({SW*2}-{SH*2}px)</button>
+                  <button style={S.btn} onClick={() => dlFrame(activePose,4)}>? 4- ({SW*4}-{SH*4}px)</button>
+                  <button style={{ ...S.btn, gridColumn:'span 2' }} onClick={() => dlFrame(activePose,8)}>? 8- ({SW*8}-{SH*8}px)</button>
                 </div>
 
-                {/* Sprite sheet */}
-                {sheet && <>
-                  <div style={{ fontSize:'.55rem', color:'var(--ink-muted)', margin:'.6rem 0 .3rem', letterSpacing:'.06em', textTransform:'uppercase' }}>
-                    Sprite sheet (all 4 poses)
+                {sheet && (<>
+                  <span style={{ ...S.lbl, marginTop:'.7rem' }}>Sprite Sheet - all 4 poses</span>
+                  <div style={gd}>
+                    <button style={S.btn} onClick={() => dlSheet(1)}>? Native Sheet</button>
+                    <button style={S.btn} onClick={() => dlSheet(2)}>? 2- Sheet</button>
+                    <button style={{ ...S.btn, gridColumn:'span 2' }} onClick={() => dlSheet(4)}>? 4- Sheet ({SW*16}-{SH*4}px)</button>
                   </div>
-                  <div style={{ ...g2 }}>
-                    <button style={S.btn} onClick={() => dlSheet(1)}>↓ Sheet 480×120</button>
-                    <button style={S.btn} onClick={() => dlSheet(4)}>↓ Sheet 4× (1920×480)</button>
-                    <button style={{ ...S.btn, gridColumn:'span 2' }} onClick={() => dlSheet(8)}>↓ Sheet 8× (3840×960)</button>
-                  </div>
-                </>}
+                </>)}
 
-                {/* Gallery + share */}
-                <div style={{ ...g2, marginTop:'.6rem' }}>
-                  <button style={{ ...S.btn, ...(savedUrl?S.dis:{}) }}
-                    onClick={saveToGallery} disabled={uploading||!!savedUrl}>
-                    {uploading?'Saving…':savedUrl?'✓ Saved':'↑ Save to Gallery'}
-                  </button>
+                {/* Gallery */}
+                <div style={{ ...gd, marginTop:'.6rem' }}>
+                  <button
+                    style={{ ...S.btn, ...(savedUrl?S.dis:{}) }}
+                    onClick={saveToGallery} disabled={uploading||!!savedUrl}
+                  >{uploading?'Saving-':savedUrl?'? Saved':'? Save to Gallery'}</button>
                   <div style={{ position:'relative' }}>
-                    <button style={{ ...S.btn, width:'100%' }} onClick={() => setShareOpen(o=>!o)}>↗ Share</button>
+                    <button style={{ ...S.btn, width:'100%' }} onClick={() => setShareOpen(o=>!o)}>? Share</button>
                     {shareOpen && (
                       <div style={{ position:'absolute', bottom:'calc(100% + 4px)', left:0, right:0, background:'var(--bg-raise)', border:'1px solid var(--line)', zIndex:10 }}>
-                        <button style={{ ...S.btn, width:'100%', borderWidth:0, borderBottom:'1px solid var(--line-soft)' }}
-                          onClick={() => { window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(`Just generated Normie #${currentId} as a pixel art sprite!\nhttps://fully-normies.vercel.app/engine?id=${currentId}`)}`, '_blank'); setShareOpen(false) }}>
-                          X / Twitter
-                        </button>
-                        <button style={{ ...S.btn, width:'100%', borderWidth:0 }}
+                        <button
+                          style={{ ...S.btn, width:'100%', borderWidth:0, borderBottom:'1px solid var(--line-soft)' }}
+                          onClick={() => {
+                            window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(`Just generated Normie #${currentId} as a full body pixel art sprite!\nhttps://fully-normies.vercel.app/engine?id=${currentId}`)}`, '_blank')
+                            setShareOpen(false)
+                          }}
+                        >X / Twitter</button>
+                        <button
+                          style={{ ...S.btn, width:'100%', borderWidth:0 }}
                           onClick={async () => {
                             const c = frames[activePose]
                             if (navigator.share && c) c.toBlob(async b => {
                               if (b) try { await navigator.share({ title:`Normie #${currentId}`, files:[new File([b],'sprite.png',{type:'image/png'})] }) } catch{}
                             })
                             setShareOpen(false)
-                          }}>Share Image</button>
+                          }}
+                        >Share Image</button>
                       </div>
                     )}
                   </div>
                 </div>
                 {savedUrl && (
                   <div style={{ marginTop:'.4rem', fontSize:'.6rem', color:'var(--ink-muted)' }}>
-                    Saved! <a href="/gallery" style={{ color:'var(--ink)', textDecoration:'underline' }}>View Gallery</a>
+                    Saved! <a href="/gallery" style={{ color:'var(--ink)', textDecoration:'underline' }}>View Gallery ?</a>
                   </div>
                 )}
-              </>) : (
-                <div style={{ fontSize:'.65rem', color:'var(--ink-muted)' }}>
-                  Generate sprites to unlock downloads.
-                </div>
-              )}
+              </>)}
 
-              {/* ── Sprite sheet preview ──────────────────────── */}
+              {/* Sprite sheet preview */}
               {sheet && (<>
                 <hr style={{ border:'none', borderTop:'1px solid var(--line-soft)', margin:'.9rem 0' }} />
-                <span style={S.lbl}>Sprite Sheet Preview — 480×120</span>
-                <div style={{ background:'#e3e5e4', border:'1px solid var(--line)', padding:4, display:'inline-block' }}>
+                <span style={S.lbl}>Sprite Sheet Preview</span>
+                <div style={{ background:'#e3e5e4', border:'1px solid var(--line)', padding:4, display:'inline-block', maxWidth:'100%' }}>
                   <canvas
                     ref={el => {
                       if (el && sheet) {
-                        el.width=480; el.height=120
+                        el.width=sheet.width; el.height=sheet.height
                         const ctx=el.getContext('2d')!
                         ctx.imageSmoothingEnabled=false
                         ctx.drawImage(sheet,0,0)
                       }
                     }}
-                    width={480} height={120}
+                    width={sheet?.width ?? SW*SCL*4} height={sheet?.height ?? SH*SCL}
                     style={{ display:'block', imageRendering:'pixelated', maxWidth:'100%', height:'auto' }}
                   />
                 </div>
-                <div style={{ display:'flex', marginTop:'.25rem' }}>
+                <div style={{ display:'flex', marginTop:'.25rem', maxWidth:'100%' }}>
                   {POSES.map(p => (
-                    <span key={p} style={{ fontSize:'.48rem', letterSpacing:'.08em', textTransform:'uppercase', color:'var(--ink-muted)', width:'25%', textAlign:'center', display:'inline-block' }}>
-                      {POSE_LABEL[p]}
-                    </span>
+                    <span key={p} style={{
+                      fontSize:'.46rem', letterSpacing:'.08em', textTransform:'uppercase',
+                      color:'var(--ink-muted)', width:'25%', textAlign:'center', display:'inline-block',
+                    }}>{POSE_LABEL[p]}</span>
                   ))}
                 </div>
               </>)}
-
             </div>
+
           </div>
         </div>
       </main>
