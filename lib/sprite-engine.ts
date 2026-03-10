@@ -12,7 +12,7 @@ export const SW  = 40   // sprite width  (matches Normie head width)
 export const SH  = 72   // sprite height (28 head + 44 body)
 export const HR  = 28   // head rows
 export const SCL = 5    // display upscale  (40×72 → 200×360)
-export const NORMAL_LEG_H = 13
+export const NORMAL_LEG_H = 15
 
 // -- Types --------------------------------------------------------------------
 export interface TraitAttr { trait_type: string; value: string }
@@ -25,6 +25,7 @@ export interface PoseCfg {
   rArmDx: number; rArmDy: number
   lLegDx: number; rLegDx: number
   legH: number
+  isSit?: boolean   // when true: chair is drawn, legs hang straight down
 }
 
 // -- Pose data ----------------------------------------------------------------
@@ -35,8 +36,8 @@ export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', sit:'
 export const POSE_CFG: Record<Pose, PoseCfg> = {
   idle:   { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
   walk:   { torsoSquash:0, lArmDx:-1, lArmDy:-5, rArmDx:+1, rArmDy:+3, lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
-  // Sit: legs angled diagonally outward — tall enough drift:height ratio reads as bent knees to the side
-  sit:    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx:-9, rLegDx:+9, legH:10 },
+  // Sit: isSit flag triggers chair draw in drawNormie; legDx/legH overridden at draw time
+  sit:    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx: 0, rLegDx: 0, legH:9, isSit:true },
   crouch: { torsoSquash:2, lArmDx:-3, lArmDy:5,  rArmDx:3,  rArmDy:5,  lLegDx: 0, rLegDx: 0, legH:8 },
 }
 
@@ -76,13 +77,13 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
   ]},
 
   //
-  // ── SIT  (gentle idle sway while seated) ─────────────────────────────────
-  // Legs go diagonally outward: drift ≈ legH creates a clear angled-knee silhouette.
+  // ── SIT  (seated idle, chair drawn by drawNormie when isSit=true) ─────────
+  // Arms give a subtle breathing sway. Legs are overridden to hang straight down.
   { label: 'Sit', frames: [
-    { torsoSquash:0, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx:-9, rLegDx:+9, legH:10 },
-    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx:-9, rLegDx:+9, legH:10 },
-    { torsoSquash:0, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx:-9, rLegDx:+9, legH:10 },
-    { torsoSquash:0, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx:-9, rLegDx:+9, legH:10 },
+    { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx:0, rLegDx:0, legH:9, isSit:true },
+    { torsoSquash:0, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx:0, rLegDx:0, legH:9, isSit:true },
+    { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx:0, rLegDx:0, legH:9, isSit:true },
+    { torsoSquash:0, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx:0, rLegDx:0, legH:9, isSit:true },
   ]},
 
   //
@@ -176,11 +177,13 @@ export function drawNormie(
 
   // ── Body proportions ──────────────────────────────────────────────────────
   const buildLvl = s2 % 3   // 0=slim  1=medium  2=stocky
-  // Males: 10px base (proportionate to 28-row head). Females: 8px.
-  const baseTW   = isAlien ? 7 : isFemale ? 8 : isYoung ? 9 : isCat ? 10 : 10
-  const tW       = baseTW + buildLvl
-  // Males: +3 shoulder flare; females: +2
-  const shW      = tW + (isFemale || isAlien ? 2 : 3)
+  // Base torso: each type has a natural width, build adds 0-2px on top
+  const baseTW   = isAlien ? 6 : isCat ? 8 : isFemale ? 7 : isYoung ? 8 : isOld ? 9 : 10
+  const tW       = baseTW + buildLvl   // 6–12 depending on type & build
+  // Shoulder flare: for males, slim build gets the widest V-taper (lean look),
+  // stocky build gets minimal flare (barrel-chest look). shW stays ~14 for all.
+  const shFlare  = isFemale || isAlien ? 2 : Math.max(4 - buildLvl, 2)
+  const shW      = tW + shFlare
   const tX       = cx - Math.floor(tW  / 2)
   const shX      = cx - Math.floor(shW / 2)
 
@@ -200,7 +203,7 @@ export function drawNormie(
 
   // ── TORSO ──────────────────────────────────────────────────────────────────
   const tY = HR + 3   // starts right after 3-row shoulder taper
-  const tH = 12 - cfg.torsoSquash  // shorter torso = better leg:torso ratio
+  const tH = 13 - cfg.torsoSquash  // fills 72-row canvas better
 
   for (let y = 0; y < tH; y++) {
     // Females only: 1px waist inset at mid-torso so they read clearly feminine
@@ -271,8 +274,8 @@ export function drawNormie(
   set(cx-1, tY+tH-1, false); set(cx, tY+tH-1, false)
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armW  = isYoung ? 2 : isOld ? 3 : buildLvl === 2 ? 4 : 3
-  const armH  = isYoung ? 7 : isOld ? 9 : 8   // short arms — less gangly
+  const armW  = isYoung ? 2 : 2 + Math.min(buildLvl, 1)   // slim=2, med/stocky=3
+  const armH  = isYoung ? 7 : 9   // longer to match taller legs
   const handW = armW + 1
   const handH = 2   // compact hand
   // Arms flush at shoulder edges — no gap so they attach cleanly to the body
@@ -302,9 +305,8 @@ export function drawNormie(
   for (let x = tX-1; x <= tX+tW; x++) set(x, hipY, true)
 
   // ── LEGS ──────────────────────────────────────────────────────────────────
-  const pStyle     = s1 % 3
-  const legW       = [4, 3, 4][pStyle]
-  const legGap     = 4   // wider natural stance: each leg stays on its own side during walk
+  const legW       = 3 + buildLvl   // 3=slim 4=med 5=stocky — matches body mass
+  const legGap     = 4   // natural stance: each leg stays on its own side during walk
   const lLegX      = cx - Math.floor((legW * 2 + legGap) / 2)
   const rLegX      = lLegX + legW + legGap
   const legY0      = hipY + 1
@@ -313,7 +315,9 @@ export function drawNormie(
   function fillLeg(baseX: number, drift: number, lh: number) {
     for (let s = 0; s < lh; s++) {
       const lx = Math.round(baseX + drift * s / Math.max(lh - 1, 1))
-      const lw = (legW >= 4 && s >= 6) ? legW - 1 : legW
+      // Shin taper: lower 40% of leg is 1px narrower — thigh-to-shin shape
+      const shinRow = Math.floor(lh * 0.6)
+      const lw = (legW >= 4 && s >= shinRow) ? legW - 1 : legW
       for (let w = 0; w < lw; w++) set(lx + w, legY0 + s, true)
       if (pantsDetail === 1 && lw >= 3) set(lx + Math.floor(lw/2), legY0+s, false)
       if (pantsDetail === 2 && s >= 1 && s <= 4) set(lx + lw - 1, legY0+s, false)
@@ -330,8 +334,26 @@ export function drawNormie(
     set(sX, sY, false)
   }
 
-  fillLeg(lLegX, cfg.lLegDx, cfg.legH)
-  fillLeg(rLegX, cfg.rLegDx, cfg.legH)
+  const isSitting = (cfg as any).isSit === true
+  if (isSitting) {
+    // Chair: seat bar extends wider than torso on each side, plus two vertical posts
+    const seatX = tX - 4
+    const seatW = tW + 8
+    // Seat horizontal plank — drawn before legs so legs appear in front
+    for (let y = legY0; y < legY0 + 3; y++)
+      for (let x = seatX; x < seatX + seatW; x++) set(x, y, true)
+    // Chair legs: 2px posts from below seat to near canvas bottom
+    for (let y = legY0 + 3; y < SH - 3; y++) {
+      set(seatX,             y, true); set(seatX + 1,           y, true)
+      set(seatX + seatW - 2, y, true); set(seatX + seatW - 1,   y, true)
+    }
+    // Character's legs hang straight down (short — thighs visible above seat)
+    fillLeg(lLegX, 0, 9)
+    fillLeg(rLegX, 0, 9)
+  } else {
+    fillLeg(lLegX, cfg.lLegDx, cfg.legH)
+    fillLeg(rLegX, cfg.rLegDx, cfg.legH)
+  }
 
   flush()
   return canvas
