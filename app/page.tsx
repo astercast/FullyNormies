@@ -82,7 +82,7 @@ function HeroStrip() {
 
 export default function Home() {
   const features = [
-    { n: '01', title: 'Trait-aware bodies',     body: '4 animated clips: Idle, Walk, Jump, Crouch — each 4 keyframes. Every Normie gets a unique build, outfit, and proportions from on-chain traits.' },
+    { n: '01', title: 'Trait-aware bodies',     body: '3M+ unique body combinations. Every Normie gets a distinct build, torso height, shoulder width, outfit, pants, shoes, belt, and accessories — all derived from on-chain traits.' },
     { n: '02', title: 'Real face compositing',  body: 'Your Normie\'s actual 40×40 face is pixel-sampled and composited onto the body. Every sunglass, beard, and mask preserved exactly.' },
     { n: '03', title: 'Strict 2-color palette', body: 'Every pixel snapped to #e3e5e4 / #48494b. No gradients, no blur — pure Normies-style monochrome at every scale.' },
     { n: '04', title: '12-frame sprite sheets',  body: '3 clips × 4 keyframes in a game-ready 4×3 grid. Slice each row for Idle, Walk, and Crouch animations in Unity or Godot.' },
