@@ -27,9 +27,9 @@ const PD: [number,number,number] = [0x48,0x49,0x4b]  // dark charcoal
 
 // Native sprite dimensions
 const SW  = 40  // sprite width (matches Normie head width)
-const SH  = 72  // sprite height (28 head + 44 body)
-const HR  = 28  // head rows from the 40x40 Normie bitmap
-const SCL = 5   // display upscale (40x72 -> 200x360)
+const SH  = 84  // sprite height (40 full head + 44 body)
+const HR  = 40  // use ALL 40 rows of the original Normie bitmap
+const SCL = 5   // display upscale (40x84 -> 200x420)
 
 type Pose = 'idle' | 'walk' | 'attack' | 'crouch'
 const POSES: Pose[] = ['idle', 'walk', 'attack', 'crouch']
@@ -121,125 +121,170 @@ function drawNormie(pixels: string, traits: TraitsData, pose: Pose): HTMLCanvasE
   const isFemale = gender.includes('female')
   const isOld    = age.includes('old')
 
-  // Body width varies by type
-  const bW = isAlien ? 10 : isAgent ? 13 : 12
-  const bX = Math.floor((SW - bW) / 2)        // left edge of torso
-  const cx = Math.floor(SW / 2)               // center column
+  const cx = Math.floor(SW / 2)   // center column = 20
 
-  // ── HEAD: stamp exact 40x40 Normie pixels (rows 0..HR-1) ─────────────────
+  // ── FULL HEAD/TORSO: stamp all 40 original Normie pixels exactly ──────────
+  // Rows 0-29 = face+hair, rows 30-39 = shoulders/upper shirt (already drawn)
   for (let r = 0; r < HR; r++)
     for (let c = 0; c < SW; c++)
       if (pixels[r * SW + c] === '1') set(c, r, true)
 
-  // ── NECK ─────────────────────────────────────────────────────────────────
-  const neckW = isAlien ? 3 : 5
-  const neckX = Math.floor((SW - neckW) / 2)
-  // Neck bridges gap between head bottom and torso top
-  rect(set, neckX, HR - 2, neckW, 5, true)
+  // Everything below row 39 is procedurally generated to continue seamlessly.
+  // The original bitmap bottom (rows 34-39) is roughly 26px wide, centred at 20.
+  // We start the lower torso continuation from row HR=40.
 
-  // ── TORSO ─────────────────────────────────────────────────────────────────
-  const tY = TORSO_Y + cfg.torsoShift
-  const tH = TORSO_H - cfg.torsoSquash
+  const tY = HR + cfg.torsoShift   // lower torso start row (40 idle)
+  const tH = TORSO_H - cfg.torsoSquash  // lower torso height
 
-  if (isAgent) {
-    rect(set, bX, tY, bW, tH, true)        // dark suit fill
-    const shirtX = cx - 1
-    for (let y=tY; y<tY+tH-2; y++) { set(shirtX, y, false); set(shirtX+1, y, false) }
-    set(shirtX,   tY+2, true); set(shirtX+1, tY+2, true)  // tie knot
-    set(bX+1, tY+1, false); set(bX+bW-2, tY+1, false)     // lapels
-    set(bX+2, tY+3, false)                                  // pocket square
-  } else {
-    rect(set, bX, tY, bW, tH, true)             // outer dark fill
-    if (bW > 2 && tH > 4)
-      rect(set, bX+1, tY+1, bW-2, tH-4, false) // inner shirt fill
-    // Neckline
-    if (isFemale) {
-      set(cx-1, tY, true); set(cx, tY, true)
-      set(cx-2, tY+1, true); set(cx+1, tY+1, true)
+  // Lower-torso width tapers slightly toward the waist
+  // outer = 14px at top, 12px at waist (matches the shoulder silhouette)
+  const bW  = isAlien ? 10 : isAgent ? 13 : 12
+  const bX  = Math.floor((SW - bW) / 2)   // left edge (14 for 12-wide)
+
+  // ── LOWER TORSO (rows 40-59) ──────────────────────────────────────────────
+  // Draw row by row so we can taper the sides naturally
+  for (let row = 0; row < tH; row++) {
+    const y = tY + row
+    // Taper: start 1px wider at top, reach bW at row 3, then slight waist pinch
+    const taper = row < 3 ? 1 : 0
+    const lx = bX - taper
+    const rx = bX + bW + taper
+    // Outline columns
+    set(lx, y, true); set(rx - 1, y, true)
+    // Interior fill (light) - but dark for agent suit
+    for (let x = lx + 1; x < rx - 1; x++) set(x, y, isAgent ? false : false)
+    // Top row blends into existing pixels (no explicit fill needed)
+    if (row === 0) continue
+    // Inner fill
+    if (!isAgent) {
+      for (let x = lx + 1; x < rx - 1; x++) set(x, y, false)
     } else {
-      set(cx-1, tY, true); set(cx, tY, true)
+      // Agent: dark suit, light shirt strip down center
+      for (let x = lx; x < rx; x++) set(x, y, true)
+      set(cx - 1, y, false); set(cx, y, false)
     }
-    // Belt
-    if (!isAlien) {
-      const beltY = tY + tH - 4
-      for (let x=bX; x<bX+bW; x++) set(x, beltY, true)
+    // Belt line
+    if (row === tH - 3) {
+      for (let x = lx; x < rx; x++) set(x, y, true)
+      set(cx - 1, y, false); set(cx, y, false)  // buckle
     }
     // Cat chest stripe
-    if (isCat)
-      for (let y=tY+2; y<tY+tH-4; y++) set(cx, y, true)
+    if (isCat && row > 0 && row < tH - 3) set(cx, y, true)
   }
 
-  // ── ARMS (parametric line from shoulder to tip) ───────────────────────────
-  // Each arm is drawn as a 2-pixel-wide segment strip curving from shoulder
-  // in the direction given by (dx, dy) offsets in PoseCfg.
-  const shoulderY = tY + 2
-  const lSX = bX - 2     // left shoulder attach x
-  const rSX = bX + bW + 1  // right shoulder attach x
-  const armSteps = ARM_H
+  // ── ARMS ─────────────────────────────────────────────────────────────────
+  // Arms attach at row 40-41 (shoulder level), hanging from the wide shoulders
+  // already visible in the original bitmap rows 33-39.
+  // Each arm: 3px wide (outer dark, inner light), tapers to 2px at hand,
+  // ends in a rounded 3x3 hand blob.
 
-  function drawArm(sx: number, dx: number, dy: number, rightFacing: boolean) {
-    for (let s=0; s<armSteps; s++) {
-      const t  = s / (armSteps - 1)
-      const ax = Math.round(sx + dx * t)
+  const shoulderY = tY + 1     // row 41 — arm root just below original bitmap
+  // Shoulder attachment columns (just outside the torso edges)
+  const lArmRootX = bX - 3     // col 11
+  const rArmRootX = bX + bW + 2 // col 28
+
+  function drawArm(rootX: number, dx: number, dy: number, facingRight: boolean) {
+    const steps = ARM_H  // 9 steps = upper arm
+    for (let s = 0; s < steps; s++) {
+      const t  = s / (steps - 1)
+      const ax = Math.round(rootX + dx * t)
       const ay = shoulderY + s + Math.round(dy * t)
+      // 2px wide arm
+      if (facingRight) {
+        set(ax,     ay, true)
+        set(ax + 1, ay, true)
+        if (s > 0 && s < steps - 1) set(ax, ay, false)  // inner soften
+      } else {
+        set(ax - 1, ay, true)
+        set(ax,     ay, true)
+        if (s > 0 && s < steps - 1) set(ax, ay, false)
+      }
+    }
+    // Forearm continuation (another ~5 steps, narrower)
+    const foreSteps = 5
+    const elbowX = Math.round(rootX + dx)
+    const elbowY = shoulderY + steps + Math.round(dy)
+    const handDx = facingRight ?  2 : -2
+    for (let s = 0; s < foreSteps; s++) {
+      const t  = s / (foreSteps - 1)
+      const ax = Math.round(elbowX + handDx * t)
+      const ay = elbowY + s
       set(ax, ay, true)
-      set(ax + (rightFacing ? 1 : -1), ay, true)
-      if (s > 0 && s < armSteps-1) set(ax, ay, false) // inner highlight
+      if (s < foreSteps - 1) set(ax + (facingRight ? 1 : -1), ay, true)
     }
-    // Hand
-    const hx = Math.round(sx + dx) + (rightFacing ? 0 : -3)
-    const hy = shoulderY + armSteps + Math.round(dy)
-    rect(set, hx, hy, 4, 3, true)
-    // Fist detail on strong punch
-    if (Math.abs(dx) > 7) {
-      const kx = rightFacing ? hx+3 : hx
-      set(kx, hy, false); set(kx, hy+1, false)
-    }
+    // Hand: 3×3 rounded blob
+    const hx = Math.round(elbowX + handDx) + (facingRight ? 0 : -2)
+    const hy = elbowY + foreSteps
+    set(hx + 1, hy,     true); set(hx + 2, hy,     true)  // top row (narrow)
+    set(hx,     hy + 1, true); set(hx + 1, hy + 1, true); set(hx + 2, hy + 1, true)
+    set(hx + 1, hy + 2, true); set(hx + 2, hy + 2, true)  // bottom
   }
 
-  drawArm(lSX, cfg.lArmDx, cfg.lArmDy, false)
-  drawArm(rSX, cfg.rArmDx, cfg.rArmDy, true)
+  drawArm(lArmRootX, cfg.lArmDx, cfg.lArmDy, false)
+  drawArm(rArmRootX, cfg.rArmDx, cfg.rArmDy, true)
 
-  // ── LEGS + FEET ───────────────────────────────────────────────────────────
+  // ── HIP TRANSITION ────────────────────────────────────────────────────────
+  // Row after torso: slight flare for hip belt
   const hipY = tY + tH
-  rect(set, bX, hipY, bW, 2, true)  // hip crossbar
+  for (let x = bX - 1; x < bX + bW + 1; x++) set(x, hipY, true)
 
-  const lLegX = bX + 2             // 16
-  const rLegX = bX + bW - LEG_W - 2  // 22
+  // ── LEGS ─────────────────────────────────────────────────────────────────
+  // Two separate legs, each 3px wide (dark outer, light inner channel)
+  // They split from the hip center and angle slightly outward then down.
 
-  function drawLeg(baseX: number, xDrift: number, lh: number, leftSide: boolean) {
-    for (let s=0; s<lh; s++) {
-      const t  = s / Math.max(lh-1, 1)
-      const lx = Math.round(baseX + xDrift * t)
-      const ly = hipY + 2 + s
-      rect(set, lx, ly, LEG_W, 1, true)
-      if (LEG_W > 2) { set(lx+1, ly, false); if (LEG_W > 3) set(lx+2, ly, false) }
-      if (s === Math.floor(lh/2)) { set(lx, ly, true); set(lx+LEG_W-1, ly, true) } // knee
+  const lLegRootX = bX + 1         // col 15
+  const rLegRootX = bX + bW - 4    // col 22
+
+  function drawLeg(rootX: number, xDrift: number, lh: number) {
+    for (let s = 0; s < lh; s++) {
+      const t  = s / Math.max(lh - 1, 1)
+      const lx = Math.round(rootX + xDrift * t)
+      const ly = hipY + 1 + s
+      // 3px wide: dark | light | dark
+      set(lx,     ly, true)
+      set(lx + 1, ly, false)  // inner highlight channel
+      set(lx + 2, ly, true)
+      // Knee cap bump at midpoint
+      if (s === Math.floor(lh / 2)) {
+        set(lx - 1, ly, true)
+        set(lx + 3, ly, true)
+      }
     }
-    // Foot
-    const fx = Math.round(baseX + xDrift) + (leftSide ? -1 : 0)
-    const fy = hipY + 2 + lh
-    rect(set, fx, fy, FOOT_W, FOOT_H, true)
-    set(fx+1, fy, false); set(fx+2, fy, false) // shoe highlight
+    // Ankle (narrows to 2px)
+    const ankleX = Math.round(rootX + xDrift)
+    const ankleY = hipY + 1 + lh
+    set(ankleX + 1, ankleY, true)
+    set(ankleX + 2, ankleY, true)
+    // Shoe: wider than leg, rounded toe
+    const shoeX  = ankleX
+    const shoeY  = ankleY + 1
+    // Row 1 of shoe (narrow heel start)
+    set(shoeX + 1, shoeY,     true); set(shoeX + 2, shoeY,     true)
+    // Row 2 of shoe (full width)
+    for (let x = shoeX; x < shoeX + FOOT_W; x++) set(x, shoeY + 1, true)
+    set(shoeX + 1, shoeY + 1, false); set(shoeX + 2, shoeY + 1, false)  // shine
+    // Row 3 (slight undercut at heel)
+    for (let x = shoeX + 1; x < shoeX + FOOT_W; x++) set(x, shoeY + 2, true)
   }
 
-  drawLeg(lLegX, cfg.lLegDx, cfg.legH, true)
-  drawLeg(rLegX, cfg.rLegDx, cfg.legH, false)
+  drawLeg(lLegRootX, cfg.lLegDx, cfg.legH)
+  drawLeg(rLegRootX, cfg.rLegDx, cfg.legH)
 
   // ── ACCESSORIES (body portion) ────────────────────────────────────────────
   if (accessory.includes('chain') || accessory.includes('necklace')) {
-    const cy = tY + 3
-    for (let x=cx-2; x<=cx+2; x++) set(x, cy, true)
+    const aY = tY + 2
+    for (let x = cx - 2; x <= cx + 2; x++) set(x, aY, true)
+    set(cx, aY + 1, true)
   }
 
   if (isOld && (pose === 'idle' || pose === 'walk')) {
-    // Walking cane
-    const caneX = bX + bW + 2
-    const caneTop = shoulderY
-    const caneBot = Math.min(hipY + 2 + cfg.legH + FOOT_H, SH-2)
-    for (let y=caneTop; y<=caneBot; y++) set(caneX, y, true)
-    set(caneX-1, caneTop, true); set(caneX+1, caneTop, true)  // handle
-    set(caneX-1, caneBot, true); set(caneX+1, caneBot, true)  // foot
+    // Walking cane — thin line to the right of the body
+    const caneX  = bX + bW + 4
+    const caneTop = shoulderY + 2
+    const caneBot = Math.min(hipY + 1 + cfg.legH + FOOT_H + 2, SH - 2)
+    for (let y = caneTop; y <= caneBot; y++) set(caneX, y, true)
+    set(caneX - 1, caneTop, true); set(caneX + 1, caneTop, true)  // handle
+    set(caneX - 1, caneBot, true)                                   // rubber tip
   }
 
   flush()
