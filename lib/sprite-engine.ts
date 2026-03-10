@@ -12,7 +12,7 @@ export const SW  = 40   // sprite width  (matches Normie head width)
 export const SH  = 72   // sprite height (28 head + 44 body)
 export const HR  = 28   // head rows
 export const SCL = 5    // display upscale  (40×72 → 200×360)
-export const NORMAL_LEG_H = 11
+export const NORMAL_LEG_H = 13
 
 // -- Types --------------------------------------------------------------------
 export interface TraitAttr { trait_type: string; value: string }
@@ -34,9 +34,9 @@ export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', jump:
 // Reference poses — used for the 4 display cards
 export const POSE_CFG: Record<Pose, PoseCfg> = {
   idle:   { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
-  walk:   { torsoSquash:0, lArmDx:-2, lArmDy:-4, rArmDx:+2, rArmDy:+2, lLegDx:-7, rLegDx:+8, legH:NORMAL_LEG_H },
-  jump:   { torsoSquash:0, lArmDx:-2, lArmDy:-8, rArmDx:2,  rArmDy:-8, lLegDx:-3, rLegDx: 3, legH:6 },
-  crouch: { torsoSquash:2, lArmDx:-3, lArmDy:5,  rArmDx:3,  rArmDy:5,  lLegDx: 0, rLegDx: 0, legH:7 },
+  walk:   { torsoSquash:0, lArmDx:-1, lArmDy:-5, rArmDx:+1, rArmDy:+3, lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
+  jump:   { torsoSquash:0, lArmDx:-2, lArmDy:-8, rArmDx:2,  rArmDy:-8, lLegDx:-3, rLegDx: 3, legH:7 },
+  crouch: { torsoSquash:2, lArmDx:-3, lArmDy:5,  rArmDx:3,  rArmDy:5,  lLegDx: 0, rLegDx: 0, legH:8 },
 }
 
 // =============================================================================
@@ -59,18 +59,19 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
 
   //
   // ── WALK  (4-frame stride cycle) ──────────────────────────────────────────
-  // This is a FRONT-FACING sprite walking sideways — arms swing UP/DOWN (Dy dominant),
-  // not left-right (large Dx would push arms into/through the torso on front view).
-  // Legs spread wide left-right to show the stride clearly.
+  // legGap=4 gives each leg room so they never cross.
+  // Contact frames: small outward drift ±3±4 from each leg's natural base.
+  // Passing frames: drift=0, feet sit exactly under each hip. legH-1 = bent knee.
+  // Arms: swing purely in Y (Dy) so they don't clip the torso silhouette.
   { label: 'Walk', frames: [
-    // F1 "Right contact" — R leg fwd, L arm swings up (opposite arm/leg)
-    { torsoSquash:0, lArmDx:-2, lArmDy:-5, rArmDx:+2, rArmDy:+3, lLegDx:-7, rLegDx:+8, legH:NORMAL_LEG_H   },
-    // F2 passing — feet under body, arms neutral, knees bent (legH-2)
-    { torsoSquash:0, lArmDx:-1, lArmDy: 2, rArmDx:+1, rArmDy: 2, lLegDx:+1, rLegDx:-1, legH:NORMAL_LEG_H-2 },
-    // F3 "Left contact" — L leg fwd, R arm swings up
-    { torsoSquash:0, lArmDx:-2, lArmDy:+3, rArmDx:+2, rArmDy:-5, lLegDx:+7, rLegDx:-8, legH:NORMAL_LEG_H   },
-    // F4 passing — same as F2
-    { torsoSquash:0, lArmDx:-1, lArmDy: 2, rArmDx:+1, rArmDy: 2, lLegDx:-1, rLegDx:+1, legH:NORMAL_LEG_H-2 },
+    // F1 — right contact: R foot fwd (+4), L foot back (-3). L arm raises (opp. leg).
+    { torsoSquash:0, lArmDx:-1, lArmDy:-5, rArmDx:+1, rArmDy:+4, lLegDx:-3, rLegDx:+4, legH:NORMAL_LEG_H   },
+    // F2 — passing: both feet under hips, slight knee bend, arms relaxed.
+    { torsoSquash:0, lArmDx:-1, lArmDy: 2, rArmDx:+1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
+    // F3 — left contact: L foot fwd (+3), R foot back (-4). R arm raises.
+    { torsoSquash:0, lArmDx:-1, lArmDy:+4, rArmDx:+1, rArmDy:-5, lLegDx:+3, rLegDx:-4, legH:NORMAL_LEG_H   },
+    // F4 — passing: same as F2.
+    { torsoSquash:0, lArmDx:-1, lArmDy: 2, rArmDx:+1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
   ]},
 
   //
@@ -201,7 +202,7 @@ export function drawNormie(
 
   // ── TORSO ──────────────────────────────────────────────────────────────────
   const tY = HR + 5   // starts right after 5-row shoulder taper
-  const tH = 14 - cfg.torsoSquash
+  const tH = 12 - cfg.torsoSquash  // shorter torso = better leg:torso ratio
 
   for (let y = 0; y < tH; y++) {
     // Females only: 1px waist inset at mid-torso so they read clearly feminine
@@ -304,8 +305,8 @@ export function drawNormie(
 
   // ── LEGS ──────────────────────────────────────────────────────────────────
   const pStyle     = s1 % 3
-  const legW       = [4, 3, 4][pStyle]  // cap at 4px — 5px legs look too blocky
-  const legGap     = 2
+  const legW       = [4, 3, 4][pStyle]
+  const legGap     = 4   // wider natural stance: each leg stays on its own side during walk
   const lLegX      = cx - Math.floor((legW * 2 + legGap) / 2)
   const rLegX      = lLegX + legW + legGap
   const legY0      = hipY + 1
