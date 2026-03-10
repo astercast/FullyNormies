@@ -454,14 +454,11 @@ function EngineInner() {
                 </div>
               )}
 
-              {/* Sprite sheet preview */}
+              {/* Sprite sheet preview — compact */}
               {sheet && (<>
                 <hr style={{ border:'none', borderTop:'1px solid var(--line-soft)', margin:'.9rem 0' }} />
-                <span style={S.lbl}>Sprite Sheet Preview</span>
-                <div style={{ fontSize:'.55rem', color:'var(--ink-muted)', marginBottom:'.5rem', lineHeight:1.7 }}>
-                  16 frames · 4 clips × 4 keyframes · {SW}×{SH}px · Idle/Walk/Jump/Crouch · Unity&nbsp;/&nbsp;Godot
-                </div>
-                <div style={{ background:'#e3e5e4', border:'1px solid var(--line)', padding:4, display:'inline-block', maxWidth:'100%', overflow:'hidden' }}>
+                <span style={S.lbl}>Sprite Sheet</span>
+                <div style={{ background:'#e3e5e4', border:'1px solid var(--line)', padding:2, display:'inline-block' }}>
                   <canvas
                     ref={el => {
                       if (el && sheet) {
@@ -472,20 +469,12 @@ function EngineInner() {
                       }
                     }}
                     width={sheet?.width ?? SW*SCL*4} height={sheet?.height ?? SH*SCL}
-                    style={{ display:'block', imageRendering:'pixelated', maxWidth:'100%', height:'auto' }}
+                    style={{ display:'block', imageRendering:'pixelated', width: 160, height:'auto' }}
                   />
                 </div>
-                {/* Clip row labels: name + F2/F3/F4 for each row */}
-                {ANIM_CLIPS.map((clip, row) => (
-                  <div key={row} style={{ display:'flex', marginTop:'.1rem', maxWidth:'100%' }}>
-                    <span style={{ width:'25%', fontSize:'.44rem', letterSpacing:'.06em', textTransform:'uppercase',
-                      color:'var(--ink)', fontWeight:700, textAlign:'center', display:'inline-block' }}>{clip.label}</span>
-                    {[2,3,4].map(n => (
-                      <span key={n} style={{ width:'25%', fontSize:'.42rem', color:'var(--ink-muted)',
-                        textAlign:'center', display:'inline-block' }}>F{n}</span>
-                    ))}
-                  </div>
-                ))}
+                <div style={{ fontSize:'.42rem', color:'var(--ink-muted)', marginTop:'.3rem' }}>
+                  16 frames · 4×4 · {SW}×{SH}px
+                </div>
               </>)}
             </div>
 
