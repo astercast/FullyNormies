@@ -9,8 +9,8 @@ export const PD: [number,number,number] = [0x48,0x49,0x4b]  // dark charcoal
 
 // -- Native sprite dimensions -------------------------------------------------
 export const SW  = 40   // sprite width  (matches Normie head width)
-export const SH  = 80   // sprite height (30 head + 50 body)
-export const HR  = 30   // head rows (extra 2 rows for beards/chins)
+export const SH  = 80   // sprite height (26 head + 54 body)
+export const HR  = 26   // head rows (cut above chin for clean neck)
 export const SCL = 5    // display upscale  (40×80 → 200×400)
 export const NORMAL_LEG_H = 11
 
@@ -157,39 +157,44 @@ export function drawNormie(
   const isAngry  = expr.includes('angry') || expr.includes('serious')
   const cx       = Math.floor(SW / 2)   // 20
 
-  // ── Measure head base width (bottom 4 rows) ──────────────────────────────
-  let headBaseW = 0
-  for (let r = HR - 4; r < HR; r++) {
-    let minX = SW, maxX = -1
-    for (let c = 0; c < SW; c++) {
-      if (pixels[r * SW + c] === '1') { if (c < minX) minX = c; if (c > maxX) maxX = c }
-    }
-    if (maxX >= minX) headBaseW = Math.max(headBaseW, maxX - minX + 1)
+  // ── Measure head center (for neck placement) ─────────────────────────────
+  let headCx = cx
+  {
+    let sumX = 0, cnt = 0
+    for (let r = HR - 3; r < HR; r++)
+      for (let c = 0; c < SW; c++)
+        if (pixels[r * SW + c] === '1') { sumX += c; cnt++ }
+    if (cnt > 0) headCx = Math.round(sumX / cnt)
   }
 
-  // ── Body proportions (unified — no gender differentiation) ────────────────
+  // ── Body proportions ──────────────────────────────────────────────────────
   const buildLvl = s2 % 3   // 0=slim  1=medium  2=stocky
   const baseTW   = isAlien ? 12 : isYoung ? 12 : isCat ? 14 : 14
   const tW       = baseTW + buildLvl      // 12–16 px
-  const shW      = Math.max(tW + 6, Math.min(headBaseW + 2, 28))
   const tX       = cx - Math.floor(tW  / 2)
-  const shX      = cx - Math.floor(shW / 2)
+  const neckW    = 4
 
-  // ── HEAD (rows 0-29) ──────────────────────────────────────────────────────
+  // ── HEAD (rows 0 to HR-1) ─────────────────────────────────────────────────
   for (let r = 0; r < HR; r++)
     for (let c = 0; c < SW; c++)
       if (pixels[r * SW + c] === '1') set(c, r, true)
 
-  // ── SHOULDER (3 rows): smooth blend from shW → tW ────────────────────────
-  for (let si = 0; si < 3; si++) {
-    const t  = si / 2   // 0 → shW, 0.5 → mid, 1 → tW
-    const w  = Math.round(shW * (1 - t) + tW * t)
+  // ── NECK (3 rows) ─────────────────────────────────────────────────────────
+  const neckX = headCx - Math.floor(neckW / 2)
+  for (let ni = 0; ni < 3; ni++)
+    for (let x = neckX; x < neckX + neckW; x++) set(x, HR + ni, true)
+
+  // ── SHOULDER → TORSO (2-row taper from tW+2 → tW) ────────────────────────
+  const shY = HR + 3
+  const shW2 = tW + 2   // just slightly wider than torso
+  for (let si = 0; si < 2; si++) {
+    const w = Math.round(shW2 - si * 1)  // shW2 then shW2-1
     const x0 = cx - Math.floor(w / 2)
-    for (let x = x0; x < x0 + w; x++) set(x, HR + si, true)
+    for (let x = x0; x < x0 + w; x++) set(x, shY + si, true)
   }
 
   // ── TORSO ──────────────────────────────────────────────────────────────────
-  const tY = HR + 3   // right after 3-row shoulder
+  const tY = shY + 2
   const tH = 10 - cfg.torsoSquash  // compact solid block
 
   for (let y = 0; y < tH; y++) {
@@ -235,10 +240,10 @@ export function drawNormie(
   const armH  = isYoung ? 6 : 8
   const handW = 2
   const handH = 2
-  // Arms hang from torso edges (not wide shoulder tips)
+  // Arms hang from torso edges
   const lArmX = tX - armW
   const rArmX = tX + tW
-  const armY0 = HR + 1   // start 1 row below shoulder top
+  const armY0 = shY   // start at shoulder row
 
   function fillArm(rootX: number, dx: number, dy: number) {
     for (let s = 0; s < armH; s++) {
