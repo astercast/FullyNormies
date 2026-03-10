@@ -85,7 +85,7 @@ export default function Home() {
     { n: '01', title: 'Trait-aware bodies',     body: '4 animated clips: Idle, Walk, Jump, Crouch — each 4 keyframes. Every Normie gets a unique build, outfit, and proportions from on-chain traits.' },
     { n: '02', title: 'Real face compositing',  body: 'Your Normie\'s actual 40×40 face is pixel-sampled and composited onto the body. Every sunglass, beard, and mask preserved exactly.' },
     { n: '03', title: 'Strict 2-color palette', body: 'Every pixel snapped to #e3e5e4 / #48494b. No gradients, no blur — pure Normies-style monochrome at every scale.' },
-    { n: '04', title: '16-frame sprite sheets',  body: '4 clips × 4 keyframes in a game-ready 4×4 grid. Slice each row for Idle/Walk/Jump/Crouch animations in Unity or Godot.' },
+    { n: '04', title: '12-frame sprite sheets',  body: '3 clips × 4 keyframes in a game-ready 4×3 grid. Slice each row for Idle, Walk, and Crouch animations in Unity or Godot.' },
     { n: '05', title: 'Community gallery',      body: 'Every saved sprite enters the public gallery. Browse, download at any size, and jump to any Normie\'s archive page.' },
     { n: '06', title: 'Game-ready exports',     body: 'Download at native 40px, 2×, or 4× scale. Transparent or solid background. Nearest-neighbor — zero quality loss.' },
   ]
