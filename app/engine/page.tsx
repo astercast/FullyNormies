@@ -5,542 +5,537 @@ import Nav from '../components/Nav'
 import Footer from '../components/Footer'
 import { Suspense } from 'react'
 
-// ─── Strict 2-color palette ───────────────────────────────────────
-const PL: [number,number,number] = [0xe3,0xe5,0xe4]  // light
-const PD: [number,number,number] = [0x48,0x49,0x4b]  // dark
+// ═══════════════════════════════════════════════════════════════════
+//  FULLNORMIES SPRITE ENGINE v4
+//
+//  Design philosophy:
+//  • Match the Normies aesthetic exactly: flat, minimal, CryptoPunk-style
+//  • Face is 40×40, body extends below — same pixel art grammar
+//  • NO dithering (Normies don't use it), NO gradients, NO rounded shapes
+//  • Very clean line art — single-pixel outlines, flat fills
+//  • Body proportions: ~18-22px wide (face uses ~20-36px of 40px grid)
+//  • Canvas: 120×120. Face at x=40..79, y=2..41 (centered)
+//  • Body below face starting at y=42
+// ═══════════════════════════════════════════════════════════════════
+
+const PL: [number,number,number] = [0xe3,0xe5,0xe4]  // #e3e5e4 light
+const PD: [number,number,number] = [0x48,0x49,0x4b]  // #48494b dark
 const plStr = `rgb(${PL})`, pdStr = `rgb(${PD})`
 
 // ─── PRNG ─────────────────────────────────────────────────────────
 function mkrng(s:number){
   let n=s|0
-  return()=>{n=(Math.imul(n,1664525)+1013904223)|0;return(n>>>0)/0x100000000}
+  return():number=>{n=(Math.imul(n,1664525)+1013904223)|0;return(n>>>0)/0x100000000}
 }
 
-// ─── Low-level canvas ops ─────────────────────────────────────────
+// ─── Pixel primitives ────────────────────────────────────────────
+// All coordinates are in the 120×120 canvas space
 function dk(c:CanvasRenderingContext2D,x:number,y:number,w:number,h:number){
-  if(w<=0||h<=0)return;c.fillStyle=pdStr;c.fillRect(x|0,y|0,w|0,h|0)
+  if(w<=0||h<=0)return; c.fillStyle=pdStr; c.fillRect(x|0,y|0,w|0,h|0)
 }
 function lt(c:CanvasRenderingContext2D,x:number,y:number,w:number,h:number){
-  if(w<=0||h<=0)return;c.fillStyle=plStr;c.fillRect(x|0,y|0,w|0,h|0)
+  if(w<=0||h<=0)return; c.fillStyle=plStr; c.fillRect(x|0,y|0,w|0,h|0)
 }
-function px(c:CanvasRenderingContext2D,x:number,y:number,col:boolean){
-  c.fillStyle=col?pdStr:plStr;c.fillRect(x|0,y|0,1,1)
+function row(c:CanvasRenderingContext2D,x:number,y:number,w:number,dark:boolean){
+  if(dark)dk(c,x,y,w,1); else lt(c,x,y,w,1)
 }
 
-// Bayer 4x4 ordered dithering for mid-tone depth
-const B4=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]]
-function dith(c:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,d:number){
-  for(let py=y;py<y+h;py++)for(let px2=x;px2<x+w;px2++){
-    c.fillStyle=(d>B4[py&3][px2&3])?pdStr:plStr
-    c.fillRect(px2|0,py|0,1,1)
+// Draw a filled rect with dark outline — the core primitive
+function box(c:CanvasRenderingContext2D,x:number,y:number,w:number,h:number,fillDark=false){
+  if(w<=0||h<=0)return
+  if(fillDark){ dk(c,x,y,w,h) }
+  else {
+    dk(c,x,y,w,1);dk(c,x,y+h-1,w,1)
+    dk(c,x,y,1,h);dk(c,x+w-1,y,1,h)
+    lt(c,x+1,y+1,w-2,h-2)
   }
 }
 
-// ─── Types ────────────────────────────────────────────────────────
+// ─── Trait types ─────────────────────────────────────────────────
 interface Trait{key:string;value:string}
 type Pose='idle'|'walk'|'attack'|'crouch'
-interface Arch{
-  bodyType:string;slim:boolean;clothing:string;accType:string|null
+
+interface Arch {
+  type: string      // human | cat | alien | agent
+  gender: string    // male | female | nonbinary
+  clothing: string  // suit | hoodie | jacket | stripe | tank | tshirt
+  accessory: string // top_hat | bow_tie | cap | fedora | chain | etc
+  hasAcc: boolean
 }
 
-function tv(traits:Trait[],...keys:string[]):string|null{
+function tv(traits:Trait[],...keys:string[]):string {
   for(const k of keys){
-    const f=traits.find(t=>t.key.toLowerCase().includes(k.toLowerCase()))
-    if(f&&f.value&&!['none','n/a',''].includes(f.value.toLowerCase()))return f.value
+    const f=traits.find(t=>t.key.toLowerCase()===k.toLowerCase()
+      ||t.key.toLowerCase().includes(k.toLowerCase()))
+    if(f&&f.value&&!['none','n/a',''].includes(f.value.toLowerCase()))
+      return f.value.toLowerCase()
   }
-  return null
+  return ''
 }
 
 function buildArch(traits:Trait[]):Arch{
-  const t=(tv(traits,'type','species','kind')||'Human').toLowerCase()
-  const g=(tv(traits,'gender','sex')||'').toLowerCase()
-  const sh=(tv(traits,'shirt','top','jacket','clothing','outfit','wear','hoodie')||'').toLowerCase()
-  const acc=(tv(traits,'accessory','accessories','item','hold','weapon','tool')||'').toLowerCase()
+  const type  = tv(traits,'type','species')
+  const gender= tv(traits,'gender','sex')
+  const acc   = tv(traits,'accessory')
+  const shirt = tv(traits,'shirt','top','clothing','outfit','jacket','hoodie','wear')
 
-  let bodyType='human'
-  if(t.includes('cat'))bodyType='cat'
-  else if(t.includes('alien'))bodyType='alien'
-  else if(t.includes('zombie'))bodyType='zombie'
-  else if(t.includes('robot')||t.includes('android'))bodyType='robot'
-  else if(t.includes('ape')||t.includes('monkey'))bodyType='ape'
-  else if(t.includes('skeleton'))bodyType='skeleton'
+  let normType='human'
+  if(type.includes('cat'))normType='cat'
+  else if(type.includes('alien'))normType='alien'
+  else if(type.includes('agent')||type.includes('robot')||type.includes('android'))normType='agent'
+  else if(type.includes('zombie'))normType='zombie'
+  else if(type.includes('skeleton'))normType='skeleton'
+  else if(type.includes('ape')||type.includes('monkey'))normType='ape'
 
   let clothing='tshirt'
-  if(sh.includes('suit')||sh.includes('tux')||sh.includes('blazer'))clothing='suit'
-  else if(sh.includes('hoodie')||sh.includes('hood'))clothing='hoodie'
-  else if(sh.includes('jacket')||sh.includes('coat'))clothing='jacket'
-  else if(sh.includes('stripe'))clothing='stripe'
-  else if(sh.includes('tank')||sh.includes('muscle'))clothing='tank'
+  if(shirt.includes('suit')||shirt.includes('tux')||shirt.includes('blazer'))clothing='suit'
+  else if(shirt.includes('hoodie'))clothing='hoodie'
+  else if(shirt.includes('jacket')||shirt.includes('coat'))clothing='jacket'
+  else if(shirt.includes('stripe'))clothing='stripe'
+  else if(shirt.includes('tank'))clothing='tank'
 
-  let accType:string|null=null
-  if(acc.match(/sword|blade|katana/))accType='sword'
-  else if(acc.match(/gun|pistol/))accType='gun'
-  else if(acc.match(/wand|staff/))accType='wand'
-  else if(acc.match(/shield/))accType='shield'
-  else if(acc.match(/bottle/))accType='bottle'
-  else if(acc.match(/book|tome/))accType='book'
+  let accessory='none'
+  if(acc.includes('bow_tie')||acc.includes('bow tie'))accessory='bow_tie'
+  else if(acc.includes('chain'))accessory='chain'
+  else if(acc.includes('sword')||acc.includes('blade'))accessory='sword'
+  else if(acc.includes('gun')||acc.includes('pistol'))accessory='gun'
+  else if(acc.includes('wand')||acc.includes('staff'))accessory='wand'
+  else if(acc.includes('book')||acc.includes('tome'))accessory='book'
+  else if(acc.includes('bottle'))accessory='bottle'
+  else if(acc.includes('shield'))accessory='shield'
+  else if(acc)accessory='misc'
 
   return{
-    bodyType,
-    slim:g.includes('f')||g.includes('girl'),
-    clothing,accType
+    type:normType, gender,
+    clothing, accessory,
+    hasAcc: accessory!=='none'
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  THE SPRITE ENGINE
-//  Canvas is 120×120. Face occupies y=2..41 (40px), x=40..79.
-//  Body flows DOWN from y=42 in one continuous connected silhouette.
+//  THE BODY DRAWING SYSTEM
 //
-//  Key insight: everything shares the same body-center X (cx=60).
-//  Every section connects flush to the one above it — no gaps.
+//  Layout in 120×120 canvas:
+//  Face: x=40..79, y=2..41
+//  Neck: y=42..44
+//  Shoulders: y=45..46 (wider)
+//  Upper torso: y=47..62
+//  Lower torso: y=63..72
+//  Belt: y=73..74
+//  Upper legs: y=75..88
+//  Lower legs: y=89..100
+//  Feet: y=101..107
+//  Shadow: y=109
+//
+//  Body center x=60. Body width ~20px (inner), shoulders ~26px
+//  This gives clean proportions matching the ~20-36px face width
 // ═══════════════════════════════════════════════════════════════════
 
-const CX = 60  // horizontal center
+const CX = 60
 
-// ── Measure body width by type ────────────────────────────────────
-function bodyMeasure(a:Arch):{bW:number,sW:number,nW:number}{
-  if(a.bodyType==='ape')   return{bW:26,sW:34,nW:8}
-  if(a.bodyType==='robot') return{bW:24,sW:30,nW:8}
-  if(a.slim)               return{bW:18,sW:24,nW:6}
-  return{bW:22,sW:28,nW:7}
+// Layout constants
+const NECK_Y=42, NECK_H=3
+const SHD_Y=45,  SHD_H=2
+const TRS_Y=47,  TRS_H=26
+const BELT_Y=73, BELT_H=2
+const LEG_Y=75
+const SHOE_Y=101, SHOE_H=7
+const SHADOW_Y=109
+
+// Body widths by type
+function getWidths(a:Arch):{bW:number,sW:number,nW:number,legW:number}{
+  if(a.type==='ape')    return{bW:26,sW:34,nW:10,legW:12}
+  if(a.type==='agent')  return{bW:22,sW:28,nW:8, legW:10}
+  if(a.gender.includes('female'))
+                        return{bW:18,sW:22,nW:6, legW:8}
+  return                       {bW:20,sW:26,nW:7, legW:9}
 }
 
-// ── Draw the full connected body (no face — face pasted separately) ─
-function drawSprite(
-  c:CanvasRenderingContext2D,
-  a:Arch,
-  seed:number,
-  pose:Pose
-){
-  const r=mkrng(seed^(pose.charCodeAt(0)*0x9e3))
-  const {bW,sW,nW}=bodyMeasure(a)
-  const bX=CX-(bW>>1)   // body left edge
-  const sX=CX-(sW>>1)   // shoulder left edge
-
-  // ─────────────────────────────────────────────
-  //  LAYOUT (y positions, everything flush-connected)
-  //  y=2..41   face (drawn separately via pasteFace)
-  //  y=42..44  neck — connects face to shoulders
-  //  y=45..47  shoulder bar — wider than body
-  //  y=48..75  torso (28px)
-  //  y=76..78  waist/belt (3px)
-  //  y=79..106 legs (28px each leg section)
-  //  y=107..114 feet/shoes (8px)
-  //  y=115     ground shadow
-  // ─────────────────────────────────────────────
-
-  const NECK_Y   = 42, NECK_H   = 3
-  const SHD_Y    = 45, SHD_H    = 3
-  const TORSO_Y  = 48, TORSO_H  = 28
-  const BELT_Y   = 76, BELT_H   = 3
-  const LEG_Y    = 79
-  const LEG_H    = 28  // total leg pixel height
-  const FOOT_Y   = 107
-  const FOOT_H   = 8
-  const SHADOW_Y = 116
-
-  // Pose-based offsets
-  // Walk: arms swing, legs stride
-  // Attack: right arm raises high
-  // Crouch: legs compressed, body shifts down 4px
-  const isCrouch=pose==='crouch'
-  const isWalk  =pose==='walk'
-  const isAttack=pose==='attack'
-
-  const bodyShift = isCrouch ? 4 : 0
-
-  // ── NECK ──────────────────────────────────────
-  // Neck connects directly under face (y=42..44)
+// ── Core body draw ────────────────────────────────────────────────
+function drawBody(c:CanvasRenderingContext2D, a:Arch, seed:number, pose:Pose){
+  const r=mkrng(seed^(pose.charCodeAt(0)*0x9f3))
+  const{bW,sW,nW,legW}=getWidths(a)
+  const bX=CX-(bW>>1)
+  const sX=CX-(sW>>1)
   const nX=CX-(nW>>1)
-  dk(c,nX,NECK_Y,nW,NECK_H)
-  // neck highlight
-  lt(c,nX+1,NECK_Y,1,NECK_H-1)
+  const gap=2  // gap between legs
 
-  // ── SHOULDERS ─────────────────────────────────
-  // Full-width dark bar, 1px overlap to seal neck→torso seam
-  dk(c,sX,SHD_Y,sW,SHD_H)
-  // Shoulder top highlight line
-  lt(c,sX+2,SHD_Y,sW-4,1)
+  // Pose adjustments
+  const crY = pose==='crouch' ? 6 : 0  // crouch shifts body down, compresses legs
+  const legH = pose==='crouch' ? 16 : 26
 
-  // ── TORSO ─────────────────────────────────────
-  const torsoY=TORSO_Y+bodyShift
-  drawTorso(c,a,r,bX,torsoY,bW,TORSO_H-bodyShift)
+  // Walk: legs stride left/right
+  const lLegX = pose==='walk' ? CX-gap-legW-3 : CX-gap-legW
+  const rLegX = pose==='walk' ? CX+gap+3      : CX+gap
 
-  // ── BELT / WAISTBAND ──────────────────────────
-  const beltY=BELT_Y+bodyShift
-  dk(c,bX-1,beltY,bW+2,BELT_H)
-  // Belt buckle
-  lt(c,CX-2,beltY+1,4,1);dk(c,CX-1,beltY+1,2,1)
+  // ── NECK ──────────────────────────────────────────────────────
+  dk(c, nX, NECK_Y, nW, NECK_H)
 
-  // ── ARMS ──────────────────────────────────────
-  drawArms(c,a,r,sX,SHD_Y,sW,TORSO_H,a.accType,pose)
+  // ── SHOULDERS (full-width dark bar connects neck to torso) ────
+  dk(c, sX, SHD_Y, sW, SHD_H)
+  // shoulder highlight row
+  lt(c, sX+2, SHD_Y, sW-4, 1)
 
-  // ── LEGS ──────────────────────────────────────
-  const legY=LEG_Y+bodyShift
-  drawLegs(c,a,r,legY,LEG_H-bodyShift,FOOT_Y,FOOT_H,pose)
+  // ── TORSO ─────────────────────────────────────────────────────
+  const tY=TRS_Y+crY
+  drawTorso(c, a, r, bX, tY, bW, TRS_H-crY)
 
-  // ── GROUND SHADOW ─────────────────────────────
-  const shadowW=sW+4,shadowX=CX-(shadowW>>1)
-  dk(c,shadowX,SHADOW_Y,shadowW,1)
-  lt(c,shadowX,SHADOW_Y,2,1);lt(c,shadowX+shadowW-2,SHADOW_Y,2,1)
+  // ── ARMS (before belt so belt overlaps) ───────────────────────
+  drawArms(c, a, r, sX, SHD_Y, sW, TRS_H-crY, pose)
 
-  // ── TYPE EXTRAS ───────────────────────────────
-  drawTypeExtras(c,a,r,bX,bW,torsoY,TORSO_H,beltY,sX,SHD_Y,sW)
+  // ── BELT ──────────────────────────────────────────────────────
+  const beltY=BELT_Y+crY
+  dk(c, bX-1, beltY, bW+2, BELT_H)
+  // buckle
+  lt(c, CX-2, beltY, 4, BELT_H)
+  dk(c, CX-1, beltY, 2, BELT_H)
+
+  // ── LEGS ──────────────────────────────────────────────────────
+  const legTopY=beltY+BELT_H
+  // Left leg
+  drawLeg(c, a, r, lLegX, legTopY, legW, legH, true, pose)
+  // Right leg
+  drawLeg(c, a, r, rLegX, legTopY, legW, legH, false, pose)
+
+  // ── GROUND SHADOW ────────────────────────────────────────────
+  const shadowW=sW+6
+  const shadowX=CX-(shadowW>>1)
+  dk(c, shadowX+2, SHADOW_Y, shadowW-4, 1)
+  lt(c, shadowX, SHADOW_Y, 2, 1)
+  lt(c, shadowX+shadowW-2, SHADOW_Y, 2, 1)
+
+  // ── TYPE EXTRAS ───────────────────────────────────────────────
+  drawTypeExtras(c, a, r, bX, bW, tY, TRS_H-crY, sX, sW)
 }
 
-// ── TORSO CLOTHING ────────────────────────────────────────────────
-function drawTorso(
-  c:CanvasRenderingContext2D,a:Arch,r:()=>number,
-  x:number,y:number,w:number,h:number
-){
+// ── TORSO clothing ────────────────────────────────────────────────
+function drawTorso(c:CanvasRenderingContext2D, a:Arch, r:()=>number,
+  x:number, y:number, w:number, h:number)
+{
   const cx=x+(w>>1)
-  if(a.clothing==='suit'){
-    // Dark suit body
-    dk(c,x,y,w,h)
-    // Light shirt/tie centre strip
-    const shW=Math.max(4,Math.floor(w*0.35)),shX=cx-(shW>>1)
-    lt(c,shX,y,shW,h)
-    // Left lapel
-    dk(c,x+1,y,Math.floor(w*0.22),Math.floor(h*0.5))
-    lt(c,x+2,y+1,Math.floor(w*0.14),Math.floor(h*0.38))
-    // Right lapel
-    dk(c,cx+(shW>>1),y,Math.floor(w*0.22),Math.floor(h*0.5))
-    lt(c,cx+(shW>>1)+1,y+1,Math.floor(w*0.14),Math.floor(h*0.38))
-    // Tie / buttons
-    dk(c,cx-1,y+2,3,Math.floor(h*0.55))
-    for(let i=0;i<3;i++)px(c,cx,y+5+i*6,true)
-    // Pocket square
-    dk(c,x+3,y+3,4,4);lt(c,x+4,y+4,2,2)
-    // Suit dither shadow on sides
-    dith(c,x,y,3,h,9);dith(c,x+w-3,y,3,h,9)
-  }
-  else if(a.clothing==='hoodie'||a.clothing==='jacket'){
-    lt(c,x,y,w,h)
-    dk(c,x,y,1,h);dk(c,x+w-1,y,1,h)  // side seams
-    dk(c,x,y+h-1,w,1)                  // bottom hem
-    // Centre zip / drawstring
-    dk(c,cx,y,1,h)
-    // Drawstrings (hoodie only)
-    if(a.clothing==='hoodie'){
-      dk(c,cx-3,y,2,Math.floor(h*0.35))
-      dk(c,cx+2,y,2,Math.floor(h*0.35))
-      // Kangaroo pocket
-      const pkW=Math.floor(w*0.55),pkH=7
-      const pkX=cx-(pkW>>1),pkY=y+h-pkH-1
-      dk(c,pkX,pkY,pkW,1)
-      dk(c,pkX,pkY,1,pkH);dk(c,pkX+pkW-1,pkY,1,pkH)
-      dk(c,pkX,pkY+pkH-1,pkW,1)
+
+  switch(a.clothing){
+    case'suit':{
+      // Dark filled suit
+      dk(c,x,y,w,h)
+      // Light shirt centre — gets narrower going down (lapels)
+      const lapelTop=Math.floor(w*0.4)
+      const lapelBot=Math.floor(w*0.25)
+      for(let i=0;i<h;i++){
+        const t=i/h
+        const sw=Math.round(lapelTop*(1-t)+lapelBot*t)
+        const sx=cx-(sw>>1)
+        lt(c,sx,y+i,sw,1)
+      }
+      // Lapel lines (diagonal seams)
+      for(let i=0;i<Math.floor(h*0.5);i++){
+        const lapX=Math.floor(i*0.6)
+        dk(c,x+2+lapX,y+i,1,1)
+        dk(c,x+w-3-lapX,y+i,1,1)
+      }
+      // 3 buttons on tie
+      for(let i=0;i<3;i++)dk(c,cx,y+3+i*5,2,2)
+      // Pocket square
+      lt(c,x+3,y+3,4,3); dk(c,x+3,y+3,4,1); dk(c,x+3,y+3,1,3); dk(c,x+6,y+3,1,3)
+      break
     }
-    // Cuff accents at bottom
-    dk(c,x+1,y+h-4,4,3);dk(c,x+w-5,y+h-4,4,3)
-    // Side shadow dither
-    dith(c,x+1,y,3,h,7);dith(c,x+w-4,y,3,h,7)
+    case'hoodie':
+    case'jacket':{
+      // Light fill, dark outline
+      box(c,x,y,w,h)
+      // Centre zip line
+      dk(c,cx,y,1,h)
+      if(a.clothing==='hoodie'){
+        // Drawstring cords
+        dk(c,cx-3,y,1,Math.floor(h*0.35))
+        dk(c,cx+2,y,1,Math.floor(h*0.35))
+        // Kangaroo pocket
+        const pkW=Math.floor(w*0.6),pkH=8
+        const pkX=cx-(pkW>>1),pkY=y+h-pkH-1
+        box(c,pkX,pkY,pkW,pkH)
+      }
+      // Cuff accents
+      dk(c,x+1,y+h-4,3,3); dk(c,x+w-4,y+h-4,3,3)
+      break
+    }
+    case'stripe':{
+      box(c,x,y,w,h)
+      for(let sy=y+2;sy<y+h-2;sy+=4)dk(c,x+1,sy,w-2,2)
+      // V-neck
+      for(let i=0;i<5;i++){dk(c,cx-i,y+i,1,1);dk(c,cx+i,y+i,1,1)}
+      break
+    }
+    case'tank':{
+      box(c,x,y,w,h)
+      // Thick shoulder straps
+      dk(c,x+2,y,4,6); dk(c,x+w-6,y,4,6)
+      // Armhole cuts (erase sides)
+      lt(c,x,y+7,3,Math.floor(h*0.5))
+      lt(c,x+w-3,y+7,3,Math.floor(h*0.5))
+      break
+    }
+    default:{  // tshirt
+      box(c,x,y,w,h)
+      // Crew neck
+      const nw=Math.floor(w*0.45),nx=cx-(nw>>1)
+      lt(c,nx,y,nw,3)
+      dk(c,nx,y+3,nw,1)
+      dk(c,nx-1,y+4,2,2); dk(c,nx+nw-1,y+4,2,2)
+      // Sleeve seams at shoulder
+      dk(c,x,y+3,w,1)
+      break
+    }
   }
-  else if(a.clothing==='stripe'){
-    lt(c,x,y,w,h)
-    dk(c,x,y,1,h);dk(c,x+w-1,y,1,h);dk(c,x,y+h-1,w,1)
-    // Horizontal stripes
-    for(let sy=y+2;sy<y+h-2;sy+=5)dk(c,x+1,sy,w-2,2)
-    // V-neck
-    for(let i=0;i<4;i++){px(c,cx-i,y+i,true);px(c,cx+i,y+i,true)}
+
+  // Bow tie (worn ON the shirt)
+  if(a.accessory==='bow_tie'){
+    const ty=y+2,bx=cx-5
+    dk(c,bx,ty,4,5);dk(c,bx+6,ty,4,5)
+    lt(c,bx+1,ty+1,2,3);lt(c,bx+7,ty+1,2,3)
+    dk(c,bx+4,ty+2,2,1)
   }
-  else if(a.clothing==='tank'){
-    lt(c,x,y,w,h)
-    // Thick straps
-    dk(c,x+2,y,4,5);dk(c,x+w-6,y,4,5)
-    // Side cutouts
-    lt(c,x,y+6,3,Math.floor(h*0.55));lt(c,x+w-3,y+6,3,Math.floor(h*0.55))
-    // Centre seam
-    dk(c,cx,y+6,1,h-7)
-    // Skin dither on sides
-    dith(c,x,y+6,3,Math.floor(h*0.55),8)
-    dith(c,x+w-3,y+6,3,Math.floor(h*0.55),8)
-    dk(c,x,y,1,h);dk(c,x+w-1,y,1,h);dk(c,x,y+h-1,w,1)
-  }
-  else{
-    // T-shirt default
-    lt(c,x,y,w,h)
-    dk(c,x,y,1,h);dk(c,x+w-1,y,1,h);dk(c,x,y+h-1,w,1)
-    // Crew neck cutout at top
-    const nw=Math.floor(w*0.42),nx=cx-(nw>>1)
-    lt(c,nx,y,nw,2)  // neck opening backed by light
-    dk(c,nx,y+2,nw,1);dk(c,nx-1,y+3,2,2);dk(c,nx+nw-1,y+3,2,2)
-    // Chest seam
-    dk(c,x+2,y+Math.floor(h*0.35),w-4,1)
-    // Side shadow
-    dith(c,x+1,y+3,2,h-4,8);dith(c,x+w-3,y+3,2,h-4,8)
+  if(a.accessory==='chain'){
+    for(let i=0;i<w-4;i+=3)dk(c,x+2+i,y+Math.floor(h*0.2),2,2)
   }
 }
 
 // ── ARM DRAWING ───────────────────────────────────────────────────
-function drawArms(
-  c:CanvasRenderingContext2D,a:Arch,r:()=>number,
-  sX:number,sY:number,sW:number,
-  torsoH:number,accType:string|null,pose:Pose
-){
-  const armW=a.bodyType==='ape'?9:a.slim?6:7
-  const uH=Math.floor(torsoH*0.52)  // upper arm
-  const fH=Math.floor(torsoH*0.45)  // forearm
-  const hH=8,hW=armW+2             // hand box
+function drawArms(c:CanvasRenderingContext2D, a:Arch, r:()=>number,
+  sX:number, sY:number, sW:number, torsoH:number, pose:Pose)
+{
+  const armW = a.type==='ape' ? 8 : a.gender.includes('female') ? 5 : 6
+  const uArmH = Math.floor(torsoH*0.55)
+  const fArmH = Math.floor(torsoH*0.4)
+  const handH = 6, handW = armW+1
 
-  // Base positions
-  const lUX=sX, rUX=sX+sW-armW
-  const armTop=sY+3  // arms start at shoulder level
+  const armTopY = sY+1
 
-  // Pose-dependent offsets
-  let lSwingX=0,rSwingX=0,rRaiseY=0,lFwdX=0,rFwdX=0
+  // Pose offsets
+  let lArmX=sX, rArmX=sX+sW-armW
+  let lElbXOff=-1, rElbXOff=1
+  let rRaise=0
 
-  if(pose==='walk'){
-    lSwingX=-3;rSwingX=3
-  }
-  if(pose==='attack'){
-    rRaiseY=-10  // right arm raised up for weapon
-    lSwingX=-2
-  }
-  if(pose==='crouch'){
-    lSwingX=2;rSwingX=2
-  }
+  if(pose==='walk'){ lElbXOff=-3; rElbXOff=3 }
+  if(pose==='attack'){ rRaise=-9; rElbXOff=4 }
+  if(pose==='crouch'){ lElbXOff=2; rElbXOff=2 }
 
-  // LEFT ARM
-  const lElbY=armTop+uH
-  const lFX=lUX-2+lSwingX
-  const lHY=lElbY+fH
-  dk(c,lUX,armTop,armW,uH)
-  dith(c,lUX,armTop,2,uH,8)              // inner shadow
-  lt(c,lUX+1,lElbY-1,armW-2,1)           // elbow crease
-  dk(c,lFX,lElbY,armW-1,fH)
-  lt(c,lFX+1,lHY-2,armW-3,1)             // wrist crease
-  // Hand
-  dk(c,lFX-1,lHY,hW,hH)
-  lt(c,lFX,lHY+1,hW-2,hH-2)
+  // LEFT upper arm
+  const lElbY=armTopY+uArmH
+  dk(c,lArmX,armTopY,armW,uArmH)
+  lt(c,lArmX+1,armTopY,1,uArmH)  // highlight
 
-  // RIGHT ARM (with raise for attack)
-  const rElbY=armTop+uH+rRaiseY
-  const rFX=rUX+2+rSwingX
-  const rHY=rElbY+fH
-  dk(c,rUX,armTop,armW,uH+Math.abs(rRaiseY>>1))
-  dith(c,rUX+armW-2,armTop,2,uH,8)       // inner shadow
-  lt(c,rUX+1,rElbY-1,armW-2,1)           // elbow crease
-  dk(c,rFX,rElbY,armW-1,fH)
-  lt(c,rFX+1,rHY-2,armW-3,1)             // wrist crease
-  // Hand
-  dk(c,rFX,rHY,hW,hH)
-  lt(c,rFX+1,rHY+1,hW-2,hH-2)
+  // LEFT forearm
+  const lFX=lArmX+lElbXOff
+  const lHandY=lElbY+fArmH
+  dk(c,lFX,lElbY,armW,fArmH)
+  lt(c,lFX+1,lElbY,1,fArmH)
 
-  // Accessory in right hand
-  if(accType)drawAcc(c,accType,rFX+hW+1,rHY,pose==='attack')
+  // LEFT hand
+  box(c,lFX-1,lHandY,handW,handH)
+
+  // RIGHT upper arm
+  const rElbY=armTopY+uArmH+rRaise
+  dk(c,rArmX,armTopY,armW,uArmH+Math.abs(rRaise))
+  lt(c,rArmX+armW-2,armTopY,1,uArmH)  // highlight
+
+  // RIGHT forearm
+  const rFX=rArmX+rElbXOff
+  const rHandY=rElbY+fArmH
+  dk(c,rFX,rElbY,armW,fArmH)
+  lt(c,rFX+armW-2,rElbY,1,fArmH)
+
+  // RIGHT hand
+  box(c,rFX,rHandY,handW,handH)
+
+  // Held accessory in right hand
+  if(a.accessory!=='none')drawHeldAcc(c,a.accessory,rFX+handW,rHandY,pose==='attack')
 }
 
-// ── ACCESSORY ─────────────────────────────────────────────────────
-function drawAcc(c:CanvasRenderingContext2D,type:string,x:number,y:number,raised:boolean){
-  const oy=raised?-12:0
-  switch(type){
-    case'sword':
-      dk(c,x+1,y+oy,4,5);lt(c,x+2,y+oy+1,2,3)
-      dk(c,x-1,y+oy+5,8,2)
-      dk(c,x+2,y+oy+7,2,18);lt(c,x+3,y+oy+8,1,16)
-      break
-    case'gun':
-      dk(c,x,y+oy,5,8);lt(c,x+1,y+oy+1,3,6)
-      dk(c,x+3,y+oy+2,11,4);lt(c,x+4,y+oy+3,9,2)
-      dk(c,x+2,y+oy+7,4,3)
-      break
-    case'wand':
-      dk(c,x+2,y+oy+6,3,22);lt(c,x+3,y+oy+7,1,20)
-      dk(c,x,y+oy,7,7);lt(c,x+2,y+oy+2,3,3);lt(c,x+3,y+oy+3,1,1)
-      break
-    case'shield':
-      dk(c,x+1,y+oy,8,1);dk(c,x,y+oy+1,10,9)
-      dk(c,x+1,y+oy+10,8,1);dk(c,x+2,y+oy+11,6,2)
-      lt(c,x+1,y+oy+2,8,7)
-      dk(c,x+4,y+oy+3,2,5);dk(c,x+2,y+oy+5,6,2)
-      break
-    case'bottle':
-      dk(c,x+2,y+oy,3,2)
-      dk(c,x,y+oy+2,7,1);lt(c,x,y+oy+3,7,10);dk(c,x,y+oy+13,7,1)
-      dk(c,x,y+oy+3,1,10);dk(c,x+6,y+oy+3,1,10)
-      lt(c,x+2,y+oy+5,3,6)
-      break
-    case'book':
-      dk(c,x,y+oy,9,13)
-      lt(c,x+1,y+oy+1,7,11)
-      dk(c,x+1,y+oy+4,1,5);dk(c,x+2,y+oy+3,6,1);dk(c,x+2,y+oy+9,6,1)
-      break
+// ── HELD ACCESSORIES ──────────────────────────────────────────────
+function drawHeldAcc(c:CanvasRenderingContext2D, type:string, x:number, y:number, raised:boolean){
+  const oy=raised?-10:0
+  if(type==='sword'||type==='wand'){
+    // Blade/staff: vertical line with hilt
+    dk(c,x+2,y+oy-2,3,4)  // hilt
+    lt(c,x+3,y+oy-1,1,2)
+    dk(c,x+3,y+oy+2,1,18) // blade
+    lt(c,x+4,y+oy+3,1,16)
+    if(type==='wand'){dk(c,x,y+oy,7,4);lt(c,x+2,y+oy+1,3,2)}
+  }
+  if(type==='gun'){
+    dk(c,x,y+oy,5,7);lt(c,x+1,y+oy+1,3,5)
+    dk(c,x+3,y+oy+2,10,4);lt(c,x+4,y+oy+3,8,2)
+    dk(c,x+2,y+oy+6,3,3)
+  }
+  if(type==='shield'){
+    dk(c,x,y+oy+1,1,8);dk(c,x+8,y+oy+1,1,8)
+    dk(c,x+1,y+oy,8,1);dk(c,x+1,y+oy+9,8,1)
+    dk(c,x+2,y+oy+10,6,1);dk(c,x+3,y+oy+11,4,1);dk(c,x+4,y+oy+12,2,1)
+    lt(c,x+1,y+oy+1,7,8)
+    dk(c,x+3,y+oy+3,3,1);dk(c,x+3,y+oy+3,1,4);dk(c,x+5,y+oy+3,1,4);dk(c,x+3,y+oy+6,3,1)
+  }
+  if(type==='bottle'){
+    dk(c,x+2,y+oy,3,2);box(c,x,y+oy+2,7,11)
+    lt(c,x+2,y+oy+4,2,6)
+  }
+  if(type==='book'){
+    dk(c,x,y+oy,8,11);lt(c,x+1,y+oy+1,6,9)
+    dk(c,x+1,y+oy+3,1,5);dk(c,x+2,y+oy+2,5,1);dk(c,x+2,y+oy+8,5,1)
   }
 }
 
 // ── LEG DRAWING ───────────────────────────────────────────────────
-function drawLegs(
-  c:CanvasRenderingContext2D,a:Arch,r:()=>number,
-  legY:number,legH:number,footY:number,footH:number,pose:Pose
-){
-  const lW=a.bodyType==='ape'?13:a.slim?10:12
-  const gap=2,halfG=gap>>1
-  const lLX=CX-halfG-lW, rLX=CX+halfG
+function drawLeg(c:CanvasRenderingContext2D, a:Arch, r:()=>number,
+  lx:number, topY:number, w:number, h:number, isLeft:boolean, pose:Pose)
+{
+  // Leg is one solid column, slightly tapered
+  const thighH=Math.floor(h*0.44)
+  const kneeH=3
+  const calfH=h-thighH-kneeH
 
-  // Leg sections: thigh, knee bump, calf
-  const isCrouch=pose==='crouch'
-  const isWalk=pose==='walk'
+  // Thigh
+  dk(c,lx,topY,w,thighH)
+  lt(c,isLeft?lx+w-1:lx,topY+1,1,thighH-2)  // highlight side
 
-  const thighH=isCrouch?Math.floor(legH*0.35):Math.floor(legH*0.46)
-  const kneeH=4
-  const calfH=legH-thighH-kneeH
+  // Knee cap (1px wider each side)
+  dk(c,lx-1,topY+thighH,w+2,kneeH)
+  lt(c,lx+1,topY+thighH+1,w-2,1)  // knee shine
 
-  // Walk stride: opposite legs swing
-  const lFwd=isWalk?-4:0
-  const rFwd=isWalk? 4:0
+  // Calf
+  const calfY=topY+thighH+kneeH
+  dk(c,lx,calfY,w,calfH)
+  lt(c,isLeft?lx+w-1:lx,calfY+1,1,calfH-2)  // highlight
 
-  // ── LEFT LEG ──
-  const lLX2=lLX+lFwd
-  // thigh
-  dk(c,lLX2,legY,lW,thighH)
-  lt(c,lLX2+lW-1,legY+2,1,thighH-4)         // outer highlight
-  dith(c,lLX2,legY,2,thighH,7)               // inner shadow
-  // knee
-  dk(c,lLX2-1,legY+thighH,lW+2,kneeH)
-  lt(c,lLX2+1,legY+thighH+1,lW-2,1)         // knee shine
-  // calf
-  const lCalfY=legY+thighH+kneeH
-  dk(c,lLX2,lCalfY,lW,calfH)
-  dith(c,lLX2,lCalfY,2,calfH,7)
-  lt(c,lLX2+2,lCalfY+2,2,calfH-5)           // shin highlight
-  // ankle taper
-  dk(c,lLX2+1,lCalfY+calfH,lW-2,2)
-  // shoe
-  drawShoe(c,a,lLX2,footY,lW,footH,true)
+  // Ankle
+  dk(c,lx+1,calfY+calfH,w-2,2)
 
-  // ── RIGHT LEG ──
-  const rLX2=rLX+rFwd
-  // thigh
-  dk(c,rLX2,legY,lW,thighH)
-  lt(c,rLX2,legY+2,1,thighH-4)
-  dith(c,rLX2+lW-2,legY,2,thighH,7)
-  // knee
-  dk(c,rLX2-1,legY+thighH,lW+2,kneeH)
-  lt(c,rLX2+1,legY+thighH+1,lW-2,1)
-  // calf
-  const rCalfY=legY+thighH+kneeH
-  dk(c,rLX2,rCalfY,lW,calfH)
-  dith(c,rLX2+lW-2,rCalfY,2,calfH,7)
-  lt(c,rLX2+2,rCalfY+2,2,calfH-5)
-  // ankle
-  dk(c,rLX2+1,rCalfY+calfH,lW-2,2)
-  // shoe
-  drawShoe(c,a,rLX2,footY,lW,footH,false)
+  // Shoe/foot
+  const shoeY=calfY+calfH+2
+  drawShoe(c,a,lx,shoeY,w,SHOE_H,isLeft)
 }
 
-function drawShoe(
-  c:CanvasRenderingContext2D,a:Arch,
-  lx:number,fy:number,lW:number,fH:number,isLeft:boolean
-){
-  if(a.bodyType==='skeleton'){
-    // Thin bony foot
-    dk(c,lx,fy,lW,2)
-    dk(c,isLeft?lx:lx+lW-3,fy+2,3,fH-1)
+function drawShoe(c:CanvasRenderingContext2D, a:Arch,
+  lx:number, fy:number, legW:number, fH:number, isLeft:boolean)
+{
+  if(a.type==='skeleton'){
+    dk(c,lx,fy,legW,2)
+    dk(c,isLeft?lx:lx+legW-3,fy+2,3,fH-1)
     return
   }
-  if(a.bodyType==='ape'){
-    // Wide bare foot with toe bumps
-    dk(c,lx-1,fy,lW+2,fH-2)
-    dith(c,lx-1,fy,lW+2,fH-2,9)
-    for(let t=0;t<4;t++)dk(c,lx+t*3,fy+fH-3,2,3)
+  if(a.type==='ape'){
+    dk(c,lx-1,fy,legW+2,fH-2)
+    for(let t=0;t<3;t++)dk(c,lx+t*3,fy+fH-3,2,3)
     return
   }
 
-  const shW=lW+6
-  const sx=isLeft?lx-4:lx-1
+  const shoeW=legW+5
+  const sx=isLeft?lx-3:lx-1
 
-  if(a.bodyType==='zombie'||a.bodyType==='robot'){
-    // Chunky boot
-    dk(c,sx,fy,shW,fH)
-    lt(c,sx+2,fy+1,shW-4,2)
-    dith(c,sx,fy+3,shW,fH-4,8)
-    dk(c,sx+1,fy+fH-1,shW-2,1)
-  } else {
-    // Sneaker
-    dk(c,sx+1,fy,shW-1,1)
-    dk(c,sx,fy+1,shW,fH-2)
-    dk(c,sx+1,fy+fH-1,shW-1,1)
-    lt(c,sx+2,fy+1,shW-4,2)                         // tongue highlight
-    lt(c,isLeft?sx+1:sx+shW-3,fy+3,2,fH-5)          // side panel
-    dk(c,sx+1,fy+fH-2,shW-2,1)                      // sole line
-  }
+  // Sneaker silhouette
+  dk(c,sx+1,fy,shoeW-1,1)       // top
+  dk(c,sx,fy+1,shoeW,fH-2)      // main body
+  dk(c,sx+1,fy+fH-1,shoeW-1,1)  // bottom
+  lt(c,sx+2,fy+1,shoeW-4,2)     // tongue highlight
+  dk(c,sx+1,fy+fH-2,shoeW-2,1)  // sole line
+
+  // Toe cap (slightly rounded)
+  if(!isLeft)dk(c,sx+shoeW-1,fy,1,1)
 }
 
 // ── TYPE EXTRAS ───────────────────────────────────────────────────
-function drawTypeExtras(
-  c:CanvasRenderingContext2D,a:Arch,r:()=>number,
-  bX:number,bW:number,torsoY:number,torsoH:number,
-  beltY:number,sX:number,sY:number,sW:number
-){
-  if(a.bodyType==='cat'){
-    // Curling tail from hip
-    const tx=bX+bW+2,ty=beltY+2
-    for(let i=0;i<8;i++){c.fillStyle=pdStr;c.fillRect(tx+i,ty-i,2,2)}
-    dk(c,tx+8,ty-10,3,5);lt(c,tx+9,ty-9,1,3)
+function drawTypeExtras(c:CanvasRenderingContext2D, a:Arch, r:()=>number,
+  bX:number, bW:number, torsoY:number, torsoH:number,
+  sX:number, sW:number)
+{
+  if(a.type==='cat'){
+    // Tail curling up from hip
+    const tx=bX+bW+1,ty=torsoY+torsoH-5
+    dk(c,tx,ty,2,2); dk(c,tx+2,ty-2,2,2); dk(c,tx+4,ty-4,2,2)
+    dk(c,tx+5,ty-6,2,4); lt(c,tx+6,ty-5,1,2)
+    // Tail tip
+    dk(c,tx+4,ty-8,4,3); lt(c,tx+5,ty-7,2,1)
   }
-  if(a.bodyType==='alien'){
-    // Extra secondary arms
-    const ay=sY+4,ah=Math.floor(torsoH*0.7)
-    for(let i=0;i<ah;i+=2){
-      dk(c,sX-4-(i>>2),ay+i,3,2)
-      dk(c,sX+sW+1+(i>>2),ay+i,3,2)
+  if(a.type==='alien'){
+    // Extra thin arms hanging down both sides
+    const ay=torsoY+2, ah=Math.floor(torsoH*0.75)
+    dk(c,sX-4,ay,2,ah); dk(c,sX-5,ay+ah,4,4)  // left
+    dk(c,sX+sW+2,ay,2,ah); dk(c,sX+sW+1,ay+ah,4,4)  // right
+  }
+  if(a.type==='agent'){
+    // Tie
+    const tieY=torsoY+1,tieW=4
+    const tieX=CX-(tieW>>1)
+    dk(c,tieX,tieY,tieW,2)
+    for(let i=0;i<torsoH-4;i++){
+      const tw=Math.max(2,tieW-Math.floor(i/4))
+      const tx=CX-(tw>>1)
+      dk(c,tx,tieY+2+i,tw,1)
     }
-    // Alien hands
-    dk(c,sX-8,ay+ah,5,4);dk(c,sX+sW+3,ay+ah,5,4)
+    // Lapel on suit (if agent = suit style)
+    dk(c,bX+1,torsoY,Math.floor(bW*0.2),Math.floor(torsoH*0.5))
+    lt(c,bX+2,torsoY+1,Math.floor(bW*0.12),Math.floor(torsoH*0.35))
+    dk(c,bX+bW-2,torsoY,Math.floor(bW*0.2),Math.floor(torsoH*0.5))
+    lt(c,bX+bW-2-Math.floor(bW*0.12),torsoY+1,Math.floor(bW*0.12),Math.floor(torsoH*0.35))
   }
-  if(a.bodyType==='robot'){
-    // Chest panel
-    const pX=bX+4,pY=torsoY+8,pW=bW-8,pH=10
-    dk(c,pX,pY,pW,pH);lt(c,pX+1,pY+1,pW-2,pH-2)
-    for(let row=0;row<3;row++)dk(c,pX+2,pY+2+row*3,pW-4,1)
-    // Status lights
-    dk(c,bX+2,torsoY+2,4,4);lt(c,bX+3,torsoY+3,2,2)
-    dk(c,bX+8,torsoY+2,4,4);lt(c,bX+9,torsoY+3,2,2)
-  }
-  if(a.bodyType==='skeleton'){
-    // Ribcage over torso
+  if(a.type==='skeleton'){
+    // Exposed ribcage — draw OVER the torso
     lt(c,bX+1,torsoY+1,bW-2,torsoH-2)
-    dk(c,bX,torsoY,bW,1);dk(c,bX,torsoY+torsoH-1,bW,1)
-    dk(c,bX,torsoY,1,torsoH);dk(c,bX+bW-1,torsoY,1,torsoH)
-    const sp=CX;for(let y=torsoY+2;y<torsoY+torsoH-1;y+=2)dk(c,sp,y,1,1)
-    const rh=Math.floor((torsoH-4)/4)
+    dk(c,bX,torsoY,bW,1); dk(c,bX,torsoY+torsoH-1,bW,1)
+    dk(c,bX,torsoY,1,torsoH); dk(c,bX+bW-1,torsoY,1,torsoH)
+    // Spine
+    for(let y=torsoY+2;y<torsoY+torsoH-1;y+=2) dk(c,CX,y,1,1)
+    // Ribs (4 pairs)
+    const rib=Math.floor((torsoH-6)/4)
     for(let i=0;i<4;i++){
-      const ry=torsoY+2+i*rh
-      dk(c,bX+2,ry,sp-bX-2,1);dk(c,bX+1,ry+1,sp-bX-1,1)
-      dk(c,sp+1,ry,bX+bW-sp-3,1);dk(c,sp+1,ry+1,bX+bW-sp-2,1)
+      const ry=torsoY+3+i*rib
+      dk(c,bX+2,ry,CX-bX-3,1); dk(c,bX+1,ry+1,CX-bX-2,1)
+      dk(c,CX+1,ry,bX+bW-CX-3,1); dk(c,CX+1,ry+1,bX+bW-CX-2,1)
     }
   }
-  if(a.bodyType==='zombie'){
-    // Ragged torn shirt look
+  if(a.type==='zombie'){
+    // Torn shirt — ragged bottom hem
     lt(c,bX+1,torsoY+1,bW-2,torsoH-2)
-    dk(c,bX,torsoY,bW,1);dk(c,bX,torsoY,1,torsoH);dk(c,bX+bW-1,torsoY,1,torsoH)
-    // Tears/gashes
-    dk(c,bX+3,torsoY+5,2,5);dk(c,bX+4,torsoY+6,2,5)
-    dk(c,bX+bW-5,torsoY+8,2,5);dk(c,bX+bW-4,torsoY+9,2,5)
-    // Ragged hem drips
+    dk(c,bX,torsoY,bW,1); dk(c,bX,torsoY,1,torsoH); dk(c,bX+bW-1,torsoY,1,torsoH)
+    // Tear marks
+    dk(c,bX+4,torsoY+5,2,6); dk(c,bX+bW-5,torsoY+8,2,6)
+    // Ragged hem
     for(let i=bX+1;i<bX+bW-1;i+=2){
-      const drop=(r()*4)|0
-      dk(c,i,torsoY+torsoH-drop,1,drop)
+      const d=(r()*4)|0; dk(c,i,torsoY+torsoH-d,1,d)
     }
   }
-  if(a.bodyType==='ape'){
-    // Fur texture over torso
+  if(a.type==='ape'){
+    // Fur texture — scattered dark pixels over light fill
     lt(c,bX+1,torsoY+1,bW-2,torsoH-2)
-    dk(c,bX,torsoY,bW,1);dk(c,bX,torsoY,1,torsoH);dk(c,bX+bW-1,torsoY,1,torsoH)
-    // Fur dots
+    dk(c,bX,torsoY,bW,1); dk(c,bX,torsoY,1,torsoH); dk(c,bX+bW-1,torsoY,1,torsoH)
     for(let fy=torsoY+3;fy<torsoY+torsoH-2;fy+=3)
-      for(let fx=bX+2;fx<bX+bW-2;fx+=3)dk(c,fx,fy,2,1)
+      for(let fx=bX+2;fx<bX+bW-2;fx+=3)
+        dk(c,fx,fy,2,1)
     // Lighter chest patch
-    const pW=Math.floor(bW*0.45)
-    dk(c,CX-(pW>>1),torsoY+2,pW,Math.floor(torsoH*0.55))
-    lt(c,CX-(pW>>1)+1,torsoY+3,pW-2,Math.floor(torsoH*0.55)-2)
+    const pW=Math.floor(bW*0.42)
+    dk(c,CX-(pW>>1),torsoY+2,pW,Math.floor(torsoH*0.5))
+    lt(c,CX-(pW>>1)+1,torsoY+3,pW-2,Math.floor(torsoH*0.5)-2)
   }
 }
 
-// ── FACE PIPELINE ─────────────────────────────────────────────────
-function sampleFace(img:HTMLImageElement):number[][]{
+// ═══════════════════════════════════════════════════════════════════
+//  FACE PIPELINE
+//  Uses the /pixels endpoint (1600-char binary string) for PERFECT
+//  reproduction of the on-chain pixel art. Falls back to image if needed.
+// ═══════════════════════════════════════════════════════════════════
+
+// Parse the 1600-char pixels string into 40×40 grid
+function pixelsStringToGrid(str:string):number[][]{
+  const g:number[][]=[]
+  for(let y=0;y<40;y++){
+    g[y]=[]
+    for(let x=0;x<40;x++)
+      g[y][x]=str[y*40+x]==='1'?1:0
+  }
+  return g
+}
+
+// Sample face from an image element (fallback)
+function sampleFaceFromImg(img:HTMLImageElement):number[][]{
   const oc=document.createElement('canvas');oc.width=oc.height=40
   const cx=oc.getContext('2d')!;cx.imageSmoothingEnabled=false
   cx.drawImage(img,0,0,40,40)
@@ -549,26 +544,25 @@ function sampleFace(img:HTMLImageElement):number[][]{
     g[y]=[]
     for(let x=0;x<40;x++){
       const i=(y*40+x)*4
-      if(raw[i+3]<40){g[y][x]=2;continue} // transparent → use palette bg
       g[y][x]=(0.2126*raw[i]+0.7152*raw[i+1]+0.0722*raw[i+2])<128?1:0
     }
   }
   return g
 }
 
-// Face is always pasted at x=40,y=2 (40×40px)
+// Paste the 40×40 face grid at position x=40, y=2 in the 120×120 canvas
 function pasteFace(c:CanvasRenderingContext2D,g:number[][]){
+  // Fill face area first (background)
+  lt(c,40,2,40,40)
   for(let y=0;y<40;y++)for(let x=0;x<40;x++){
-    if(g[y][x]===2)lt(c,40+x,2+y,1,1)
-    else if(g[y][x]===1)dk(c,40+x,2+y,1,1)
-    else lt(c,40+x,2+y,1,1)
+    if(g[y][x]===1)dk(c,40+x,2+y,1,1)
   }
 }
 
-// Snap every pixel to strict 2-color palette
+// Enforce strict 2-color palette on the whole canvas
 function snapPal(c:CanvasRenderingContext2D,ca:number){
   const id=c.getImageData(0,0,120,120),p=id.data
-  const thr=127+ca*15
+  const thr=128+ca*15
   for(let i=0;i<p.length;i+=4){
     if(p[i+3]<10){p[i]=PL[0];p[i+1]=PL[1];p[i+2]=PL[2];p[i+3]=255;continue}
     const lm=0.2126*p[i]+0.7152*p[i+1]+0.0722*p[i+2]
@@ -578,50 +572,31 @@ function snapPal(c:CanvasRenderingContext2D,ca:number){
   c.putImageData(id,0,0)
 }
 
-// Clean stray isolated light pixels adjacent to 3+ dark pixels
-function cleanOutline(c:CanvasRenderingContext2D){
-  const id=c.getImageData(0,0,120,120)
-  const src=new Uint8ClampedArray(id.data),dst=id.data
-  const isDk=(x:number,y:number)=>(x<0||x>=120||y<0||y>=120)?true:src[(y*120+x)*4]<100
-  for(let y=1;y<119;y++)for(let x=1;x<119;x++){
-    const i=(y*120+x)*4
-    if(src[i]>180){
-      let n=0
-      if(isDk(x-1,y))n++;if(isDk(x+1,y))n++
-      if(isDk(x,y-1))n++;if(isDk(x,y+1))n++
-      if(n>=3){dst[i]=PD[0];dst[i+1]=PD[1];dst[i+2]=PD[2];dst[i+3]=255}
-    }
-  }
-  c.putImageData(id,0,0)
-}
-
-// ─── SPRITE SHEET (4 poses × 120px = 480×120) ────────────────────
+// ─── Sprite sheet: 4 poses side by side = 480×120 ─────────────────
 const POSES:Pose[]=['idle','walk','attack','crouch']
 const POSE_LABELS=['Idle','Walk','Attack','Crouch']
 
 async function buildSheet(
-  faceImg:HTMLImageElement,traits:Trait[],seed:number,contrast:number,
-  sheet:HTMLCanvasElement,wait:(ms:number)=>Promise<void>
+  faceGrid:number[][], traits:Trait[], seed:number, contrast:number,
+  sheet:HTMLCanvasElement, wait:(ms:number)=>Promise<void>
 ){
   const arch=buildArch(traits)
-  sheet.width=480;sheet.height=120
-  const sc=sheet.getContext('2d')!;sc.imageSmoothingEnabled=false
-  sc.fillStyle=plStr;sc.fillRect(0,0,480,120)
-  const face=sampleFace(faceImg)
+  sheet.width=480; sheet.height=120
+  const sc=sheet.getContext('2d')!; sc.imageSmoothingEnabled=false
+  sc.fillStyle=plStr; sc.fillRect(0,0,480,120)
   for(let i=0;i<4;i++){
     const tmp=document.createElement('canvas');tmp.width=tmp.height=120
-    const tc=tmp.getContext('2d')!;tc.imageSmoothingEnabled=false
-    tc.fillStyle=plStr;tc.fillRect(0,0,120,120)
-    drawSprite(tc,arch,seed^(i*0x1f3),POSES[i])
-    pasteFace(tc,face)
+    const tc=tmp.getContext('2d')!; tc.imageSmoothingEnabled=false
+    tc.fillStyle=plStr; tc.fillRect(0,0,120,120)
+    drawBody(tc,arch,seed,POSES[i])
+    pasteFace(tc,faceGrid)
     snapPal(tc,contrast)
-    cleanOutline(tc)
     sc.drawImage(tmp,i*120,0)
     await wait(6)
   }
 }
 
-// ─── UI Styles ────────────────────────────────────────────────────
+// ─── UI styles ────────────────────────────────────────────────────
 const S={
   btn:{background:'transparent',border:'1px solid var(--line)',color:'var(--ink)',fontFamily:'inherit',fontSize:'.56rem',fontWeight:700,letterSpacing:'.11em',textTransform:'uppercase' as const,padding:'.42rem .82rem',cursor:'pointer',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'.3rem',userSelect:'none' as const,WebkitTapHighlightColor:'transparent'},
   btnFill:{background:'var(--ink)',color:'var(--bg)',borderColor:'var(--ink)'},
@@ -643,7 +618,7 @@ function EngineInner(){
   const [traits,setTraits]=useState<Trait[]>([])
   const [normName,setNormName]=useState('')
   const [faceUrl,setFaceUrl]=useState<string|null>(null)
-  const [faceImg,setFaceImg]=useState<HTMLImageElement|null>(null)
+  const [faceGrid,setFaceGrid]=useState<number[][]|null>(null)
   const [spriteReady,setSpriteReady]=useState(false)
   const [sheetReady,setSheetReady]=useState(false)
   const [seed,setSeed]=useState(0)
@@ -677,51 +652,73 @@ function EngineInner(){
 
   async function loadById(id:number){
     setErr('');setLoading(true);setSpriteReady(false);setSheetReady(false)
-    setTraits([]);setNormName('');setFaceUrl(null);setSavedUrl(null);setCurrentId(id)
+    setTraits([]);setNormName('');setFaceUrl(null);setSavedUrl(null)
+    setFaceGrid(null);setCurrentId(id)
     router.replace(`/engine?id=${id}`,{scroll:false})
     try{
+      // Load metadata first (traits)
       const mRes=await rf(`https://api.normies.art/normie/${id}/metadata`)
-      if(!mRes.ok)throw new Error(mRes.status===404?`Normie #${id} not found`:`Error ${mRes.status}`)
+      if(!mRes.ok)throw new Error(`Normie #${id} not found`)
       const mData=await mRes.json()
       const parsed:Trait[]=[]
       if(Array.isArray(mData.attributes))
-        mData.attributes.forEach((a:any)=>{if(a.trait_type&&a.value)parsed.push({key:String(a.trait_type),value:String(a.value)})})
+        mData.attributes.forEach((a:any)=>{if(a.trait_type&&a.value!=null)parsed.push({key:String(a.trait_type),value:String(a.value)})})
       setTraits(parsed);setNormName(mData.name||`Normie #${id}`)
-      const iRes=await rf(`https://api.normies.art/normie/${id}/image.png`)
-      if(!iRes.ok)throw new Error(`Image error ${iRes.status}`)
-      const blob=await iRes.blob()
-      const url=URL.createObjectURL(blob);setFaceUrl(url)
-      const img=await new Promise<HTMLImageElement>((res,rej)=>{
-        const i=new Image();i.crossOrigin='anonymous'
-        i.onload=()=>res(i);i.onerror=rej;i.src=url
-      })
-      setFaceImg(img)
+
+      // Load pixel grid (exact on-chain bitmap) + image simultaneously
+      const [pixRes,imgRes]=await Promise.all([
+        rf(`https://api.normies.art/normie/${id}/pixels`),
+        rf(`https://api.normies.art/normie/${id}/image.png`)
+      ])
+
+      // Parse pixel grid
+      if(pixRes.ok){
+        const pixStr=await pixRes.text()
+        setFaceGrid(pixelsStringToGrid(pixStr.trim()))
+      }
+
+      // Set face preview URL
+      if(imgRes.ok){
+        const blob=await imgRes.blob()
+        setFaceUrl(URL.createObjectURL(blob))
+      }
+
+      // If no pixel grid, fall back to image
+      if(!pixRes.ok&&imgRes.ok){
+        const blob=await imgRes.blob()
+        const url2=URL.createObjectURL(blob)
+        const img=await new Promise<HTMLImageElement>((res,rej)=>{
+          const i=new Image();i.crossOrigin='anonymous'
+          i.onload=()=>res(i);i.onerror=rej;i.src=url2
+        })
+        setFaceGrid(sampleFaceFromImg(img))
+      }
+
     }catch(e:any){setErr(e.message||'Failed to load')}
     finally{setLoading(false)}
   }
 
   async function generate(newSeed=false,pose=activePose){
-    if(!faceImg)return
+    if(!faceGrid)return
     const s=newSeed||!seed?((Math.random()*0xFFFFFF)|0):seed
     if(newSeed||!seed)setSeed(s)
     const wc=wcRef.current;if(!wc)return
     const ctx=wc.getContext('2d')!;ctx.imageSmoothingEnabled=false
 
-    prog(true,'Building body…',15);await wait(12)
+    prog(true,'Drawing body…',20);await wait(12)
     ctx.fillStyle=plStr;ctx.fillRect(0,0,120,120)
     const arch=buildArch(traits)
-    drawSprite(ctx,arch,s,pose)
+    drawBody(ctx,arch,s,pose)
 
-    prog(true,'Compositing face…',45);await wait(12)
-    pasteFace(ctx,sampleFace(faceImg))
+    prog(true,'Compositing face…',55);await wait(10)
+    pasteFace(ctx,faceGrid)
 
-    prog(true,'Enforcing palette…',72);await wait(10)
+    prog(true,'Finalizing…',80);await wait(8)
     snapPal(ctx,contrast)
-    cleanOutline(ctx)
 
-    prog(true,'Building sprite sheet…',85);await wait(8)
+    prog(true,'Building sheet…',88);await wait(6)
     const sheet=sheetRef.current
-    if(sheet)await buildSheet(faceImg,traits,s,contrast,sheet,wait)
+    if(sheet)await buildSheet(faceGrid,traits,s,contrast,sheet,wait)
 
     prog(false,'',100);await wait(6)
 
@@ -729,24 +726,22 @@ function EngineInner(){
     dc.getContext('2d')!.drawImage(wc,0,0)
     displayRef.current=dc
     setSpriteReady(true);setSheetReady(true)
+    // trigger react re-render of display canvas
+    setSpriteReady(false);await wait(10);setSpriteReady(true)
   }
 
   async function switchPose(p:Pose){
     setActivePose(p)
-    if(!faceImg||!seed)return
+    if(!faceGrid||!seed)return
     const wc=wcRef.current;if(!wc)return
     const ctx=wc.getContext('2d')!;ctx.imageSmoothingEnabled=false
     ctx.fillStyle=plStr;ctx.fillRect(0,0,120,120)
-    const arch=buildArch(traits)
-    drawSprite(ctx,arch,seed,p)
-    pasteFace(ctx,sampleFace(faceImg))
+    drawBody(ctx,buildArch(traits),seed,p)
+    pasteFace(ctx,faceGrid)
     snapPal(ctx,contrast)
-    cleanOutline(ctx)
     const dc=document.createElement('canvas');dc.width=dc.height=120
     dc.getContext('2d')!.drawImage(wc,0,0)
     displayRef.current=dc
-    setSpriteReady(true)
-    // trigger re-render
     setSpriteReady(false);await wait(10);setSpriteReady(true)
   }
 
@@ -758,10 +753,9 @@ function EngineInner(){
     const cx=out.getContext('2d')!;cx.imageSmoothingEnabled=false
     if(!transparent){cx.fillStyle=plStr;cx.fillRect(0,0,W,H)}
     cx.drawImage(src,0,0,W,H)
-    const suffix=sheet?`-sheet-${size}`:`-${activePose}-${size}${transparent?'-transparent':''}`
-    const name=`normie-${currentId}${suffix}.png`
+    const suffix=sheet?`-sheet`:`-${activePose}-${size}${transparent?'-transparent':''}`
     out.toBlob(b=>{
-      const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(b!),download:name})
+      const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(b!),download:`normie-${currentId}${suffix}.png`})
       a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3e3)
     },'image/png')
   }
@@ -825,7 +819,7 @@ function EngineInner(){
           `}</style>
           <div className="fn-eng-grid" style={{display:'grid',gridTemplateColumns:'1fr',borderBottom:'1px solid var(--line)'}}>
 
-            {/* LEFT: original normie */}
+            {/* LEFT */}
             <div style={{padding:'1.4rem 0'}}>
               <div style={{fontSize:'.5rem',letterSpacing:'.18em',textTransform:'uppercase',color:'var(--ink-muted)',marginBottom:'1.1rem',display:'flex',alignItems:'center',gap:'.4rem'}}>
                 01 — Original Normie
@@ -855,18 +849,16 @@ function EngineInner(){
               {faceUrl&&<><hr style={{border:'none',borderTop:'1px solid var(--line-soft)',margin:'.9rem 0'}}/><button style={S.btn} onClick={()=>{const a=Object.assign(document.createElement('a'),{href:faceUrl!,download:`normie-${currentId}-face.png`});a.click()}}>↓ Download Face PNG</button></>}
             </div>
 
-            {/* RIGHT: sprite engine */}
+            {/* RIGHT */}
             <div className="fn-eng-right" style={{padding:'1.4rem 0',borderTop:'1px solid var(--line)'}}>
               <div style={{fontSize:'.5rem',letterSpacing:'.18em',textTransform:'uppercase',color:'var(--ink-muted)',marginBottom:'1.1rem',display:'flex',alignItems:'center',gap:'.4rem'}}>
                 02 — Full Body Sprite Engine
                 <span style={{flex:1,height:1,background:'var(--line-soft)',display:'block',opacity:.5}}/>
               </div>
 
-              {/* Sprite preview */}
               <div style={{...S.frame,maxWidth:200}}>
                 {spriteReady&&displayRef.current
-                  ?<canvas
-                      key={activePose}
+                  ?<canvas key={`${activePose}-${seed}`}
                       ref={el=>{if(el&&displayRef.current){el.width=el.height=120;el.getContext('2d')!.drawImage(displayRef.current,0,0)}}}
                       width={120} height={120}
                       style={{width:'100%',height:'100%',imageRendering:'pixelated',display:'block'}}
@@ -879,7 +871,6 @@ function EngineInner(){
                 }
               </div>
 
-              {/* Pose selector */}
               {spriteReady&&<>
                 <span style={S.lbl}>Pose</span>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.3rem',marginBottom:'.7rem'}}>
@@ -891,21 +882,20 @@ function EngineInner(){
                 </div>
               </>}
 
-              {/* Progress bar */}
               {showProg&&<div style={{marginBottom:'.7rem'}}>
                 <div style={{fontSize:'.5rem',letterSpacing:'.1em',textTransform:'uppercase',color:'var(--ink-muted)',marginBottom:'.28rem'}}>{progLabel}</div>
                 <div style={{height:2,background:'var(--line-soft)'}}><div style={{height:2,background:'var(--ink)',width:`${progPct}%`,transition:'width .28s ease'}}/></div>
               </div>}
 
-              <button style={{...S.btn,...S.btnFill,width:'100%',marginBottom:'.45rem'}} disabled={!faceImg} onClick={()=>generate(false)}>
+              <button style={{...S.btn,...S.btnFill,width:'100%',marginBottom:'.45rem'}} disabled={!faceGrid} onClick={()=>generate(false)}>
                 ▶ Generate Full Body Sprite
               </button>
 
               {spriteReady&&<div style={grid2}>
                 <button style={S.btn} onClick={()=>generate(false)}>↺ Regenerate</button>
                 <button style={S.btn} onClick={()=>generate(true)}>⚂ New Seed</button>
-                <button style={S.btn} onClick={()=>{setContrast(c=>Math.min(3,c+1));generate(false)}}>+ Contrast</button>
-                <button style={S.btn} onClick={()=>{setContrast(c=>Math.max(-3,c-1));generate(false)}}>− Contrast</button>
+                <button style={S.btn} onClick={()=>{setContrast(cc=>Math.min(3,cc+1));generate(false)}}>+ Contrast</button>
+                <button style={S.btn} onClick={()=>{setContrast(cc=>Math.max(-3,cc-1));generate(false)}}>− Contrast</button>
               </div>}
 
               <hr style={{border:'none',borderTop:'1px solid var(--line-soft)',margin:'.9rem 0'}}/>
@@ -920,22 +910,19 @@ function EngineInner(){
                   <button style={{...S.btn,gridColumn:'span 2',...(savedUrl?{opacity:.5}:{})}} onClick={saveToGallery} disabled={uploading||!!savedUrl}>
                     {uploading?'Saving…':savedUrl?'✓ Saved to Gallery':'↑ Save to Gallery'}
                   </button>
-                  {/* Share */}
                   <div style={{gridColumn:'span 2',position:'relative'}}>
                     <button style={{...S.btn,width:'100%'}} onClick={()=>setShareOpen(o=>!o)}>↗ Share</button>
                     {shareOpen&&(
                       <div style={{position:'absolute',bottom:'calc(100% + 4px)',left:0,right:0,background:'var(--bg-raise)',border:'1px solid var(--line)',zIndex:10}}>
                         <button style={{...S.btn,width:'100%',borderWidth:0,borderBottom:'1px solid var(--line-soft)'}}
-                          onClick={()=>{
-                            const text=encodeURIComponent(`Just generated Normie #${currentId} as a full-body pixel art sprite! 🎮\nhttps://fully-normies.vercel.app/engine?id=${currentId}`)
-                            window.open(`https://x.com/intent/tweet?text=${text}`,'_blank')
-                            setShareOpen(false)
-                          }}>𝕏 Post on X / Twitter</button>
+                          onClick={()=>{window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(`Just generated Normie #${currentId} as a full-body pixel art sprite! 🎮\nhttps://fully-normies.vercel.app/engine?id=${currentId}`)}`,'_blank');setShareOpen(false)}}>
+                          𝕏 Post on X / Twitter
+                        </button>
                         <button style={{...S.btn,width:'100%',borderWidth:0}} onClick={async()=>{
                           if(navigator.share&&wcRef.current){
                             wcRef.current.toBlob(async b=>{
                               if(!b)return
-                              try{await navigator.share({title:`Normie #${currentId} Sprite`,files:[new File([b],'sprite.png',{type:'image/png'})]})}catch{}
+                              try{await navigator.share({title:`Normie #${currentId}`,files:[new File([b],'sprite.png',{type:'image/png'})]})}catch{}
                             })
                           }
                           setShareOpen(false)
@@ -946,22 +933,19 @@ function EngineInner(){
                 </div>
                 :<div style={{fontSize:'.58rem',color:'var(--ink-muted)'}}>Generate a sprite to unlock downloads.</div>
               }
-              {savedUrl&&<div style={{marginTop:'.5rem',fontSize:'.56rem',color:'var(--ink-muted)'}}>
-                Saved! <a href="/gallery" style={{color:'var(--ink)',textDecoration:'underline'}}>View Gallery →</a>
-              </div>}
+              {savedUrl&&<div style={{marginTop:'.5rem',fontSize:'.56rem',color:'var(--ink-muted)'}}>Saved! <a href="/gallery" style={{color:'var(--ink)',textDecoration:'underline'}}>View Gallery →</a></div>}
 
-              {/* Sheet preview */}
               {sheetReady&&<>
                 <hr style={{border:'none',borderTop:'1px solid var(--line-soft)',margin:'.9rem 0'}}/>
                 <span style={S.lbl}>Sprite Sheet Preview</span>
-                <div style={{background:'#e3e5e4',border:'1px solid var(--line)',padding:4,display:'inline-block',marginBottom:'.5rem'}}>
+                <div style={{background:'#e3e5e4',border:'1px solid var(--line)',padding:4,display:'inline-block',marginBottom:'.4rem'}}>
                   <canvas
                     ref={el=>{if(el&&sheetRef.current){el.width=240;el.height=60;const cx=el.getContext('2d')!;cx.imageSmoothingEnabled=false;cx.drawImage(sheetRef.current,0,0,240,60)}}}
                     width={240} height={60}
                     style={{display:'block',imageRendering:'pixelated'}}
                   />
                 </div>
-                <div style={{display:'flex',gap:0}}>
+                <div style={{display:'flex'}}>
                   {POSE_LABELS.map((l,i)=>(
                     <span key={i} style={{fontSize:'.42rem',letterSpacing:'.08em',textTransform:'uppercase',color:'var(--ink-muted)',width:60,textAlign:'center',display:'inline-block'}}>{l}</span>
                   ))}
