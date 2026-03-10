@@ -12,7 +12,7 @@ export const SW  = 40   // sprite width  (matches Normie head width)
 export const SH  = 72   // sprite height (28 head + 44 body)
 export const HR  = 28   // head rows
 export const SCL = 5    // display upscale  (40×72 → 200×360)
-export const NORMAL_LEG_H = 14
+export const NORMAL_LEG_H = 11
 
 // -- Types --------------------------------------------------------------------
 export interface TraitAttr { trait_type: string; value: string }
@@ -34,10 +34,9 @@ export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', jump:
 // Reference poses — used for the 4 display cards
 export const POSE_CFG: Record<Pose, PoseCfg> = {
   idle:   { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
-  // Walk card shows the "right contact" frame (right foot fully forward)
   walk:   { torsoSquash:0, lArmDx:-2, lArmDy:-4, rArmDx:+2, rArmDy:+2, lLegDx:-7, rLegDx:+8, legH:NORMAL_LEG_H },
-  jump:   { torsoSquash:0, lArmDx:-2, lArmDy:-9, rArmDx:2,  rArmDy:-9, lLegDx:-3, rLegDx: 3, legH:7 },
-  crouch: { torsoSquash:2, lArmDx:-5, lArmDy:6,  rArmDx:5,  rArmDy:6,  lLegDx:-4, rLegDx: 4, legH:8 },
+  jump:   { torsoSquash:0, lArmDx:-2, lArmDy:-8, rArmDx:2,  rArmDy:-8, lLegDx:-3, rLegDx: 3, legH:6 },
+  crouch: { torsoSquash:2, lArmDx:-3, lArmDy:5,  rArmDx:3,  rArmDy:5,  lLegDx: 0, rLegDx: 0, legH:7 },
 }
 
 // =============================================================================
@@ -78,13 +77,13 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
   // ── JUMP  (crouch-wind-up → launch → apex-tuck → land) ───────────────────
   { label: 'Jump', frames: [
     // F1 pre-jump crouch: mild body squash, arms draw back
-    { torsoSquash:1, lArmDx:-1, lArmDy: 4, rArmDx: 1, rArmDy: 4, lLegDx:-2, rLegDx: 2, legH:10 },
+    { torsoSquash:1, lArmDx:-1, lArmDy: 3, rArmDx: 1, rArmDy: 3, lLegDx:-2, rLegDx: 2, legH:8 },
     // F2 launch: legs extend, arms drive upward
     { torsoSquash:0, lArmDx:-3, lArmDy:-5, rArmDx: 3, rArmDy:-5, lLegDx:-1, rLegDx: 1, legH:NORMAL_LEG_H },
     // F3 apex: arms raised, legs tuck up
-    { torsoSquash:0, lArmDx:-2, lArmDy:-9, rArmDx: 2, rArmDy:-9, lLegDx:-3, rLegDx: 3, legH:7  },
-    // F4 land: arms out for balance (moderate spread), legs absorb impact
-    { torsoSquash:1, lArmDx:-4, lArmDy: 3, rArmDx: 4, rArmDy: 3, lLegDx:-2, rLegDx: 2, legH:10 },
+    { torsoSquash:0, lArmDx:-2, lArmDy:-8, rArmDx: 2, rArmDy:-8, lLegDx:-3, rLegDx: 3, legH:6  },
+    // F4 land: arms out for balance, legs absorb impact
+    { torsoSquash:1, lArmDx:-4, lArmDy: 3, rArmDx: 4, rArmDy: 3, lLegDx:-2, rLegDx: 2, legH:8  },
   ]},
 
   //
@@ -178,11 +177,11 @@ export function drawNormie(
 
   // ── Body proportions ──────────────────────────────────────────────────────
   const buildLvl = s2 % 3   // 0=slim  1=medium  2=stocky
-  // Slimmer base widths so body doesn't look like a square block at 5x scale
-  const baseTW   = isAlien ? 7 : isFemale ? 8 : isYoung ? 9 : isOld ? 11 : isCat ? 9 : 10
+  // Males: wide flat trunk (12-14px). Females: narrower with pinch (8-10px).
+  const baseTW   = isAlien ? 7 : isFemale ? 8 : isYoung ? 10 : isOld ? 12 : isCat ? 10 : 12
   const tW       = baseTW + buildLvl
-  // Shoulder slightly wider than torso; females keep subtle flare
-  const shW      = tW + (isFemale || isAlien ? 2 : 3)
+  // Males: +4 shoulder flare (broad); females: +2 (subtle)
+  const shW      = tW + (isFemale || isAlien ? 2 : 4)
   const tX       = cx - Math.floor(tW  / 2)
   const shX      = cx - Math.floor(shW / 2)
 
@@ -205,10 +204,8 @@ export function drawNormie(
   const tH = 14 - cfg.torsoSquash
 
   for (let y = 0; y < tH; y++) {
-    // Chest (rows 0-3): full width
-    // Waist (rows 4-7): 1px inset per side — visible shape for EVERYONE
-    // Hips (rows 8+): full width again → slight flare back to belt
-    const inset = (y >= 4 && y <= 7) ? 1 : 0
+    // Females only: 1px waist inset at mid-torso so they read clearly feminine
+    const inset = (isFemale && y >= 4 && y <= 7) ? 1 : 0
     for (let x = tX + inset; x < tX + tW - inset; x++) set(x, tY + y, true)
   }
 
@@ -276,14 +273,13 @@ export function drawNormie(
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
   const armW  = isYoung ? 2 : isOld ? 3 : buildLvl === 2 ? 4 : 3
-  const armH  = isYoung ? 10 : isOld ? 11 : 12
+  const armH  = isYoung ? 7 : isOld ? 9 : 8   // short arms — less gangly
   const handW = armW + 1
-  const handH = 3
-  // Place arm roots just outside the shoulder so they're always a distinct silhouette —
-  // 1px gap between shoulder edge and arm ensures arms don't merge into the torso block
-  const lArmX = shX - 1
-  const rArmX = shX + shW + 1 - armW
-  const armY0 = HR + 1   // start 1 row into shoulder taper (shoulder then arm, cleanly)
+  const handH = 2   // compact hand
+  // Arms flush at shoulder edges — no gap so they attach cleanly to the body
+  const lArmX = shX
+  const rArmX = shX + shW - armW
+  const armY0 = HR + 1   // start 1 row into shoulder taper
 
   function fillArm(rootX: number, dx: number, dy: number) {
     for (let s = 0; s < armH; s++) {
