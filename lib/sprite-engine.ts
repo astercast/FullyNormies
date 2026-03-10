@@ -34,7 +34,7 @@ export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', crouc
 // Reference poses — used for the 3 display cards
 export const POSE_CFG: Record<Pose, PoseCfg> = {
   idle:   { torsoSquash:0, lArmDx:-1, lArmDy:2,  rArmDx:1,  rArmDy:2,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
-  walk:   { torsoSquash:0, lArmDx: 0, lArmDy:-4, rArmDx: 0, rArmDy:+3, lLegDx:-3, rLegDx:+3, legH:NORMAL_LEG_H },
+  walk:   { torsoSquash:0, lArmDx:-4, lArmDy:-2, rArmDx:4, rArmDy:2,  lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
   crouch: { torsoSquash:2, lArmDx:-2, lArmDy:4,  rArmDx:2,  rArmDy:4,  lLegDx: 0, rLegDx: 0, legH:9 },
 }
 
@@ -58,19 +58,20 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
 
   //
   // ── WALK  (4-frame stride cycle) ──────────────────────────────────────────
-  //  Arms: Dx=0 so arms don't float away from the torso silhouette. Dy swings
-  //  from –4 (arm up/back) to +3 (arm down/forward). Opposite arm↔leg pairing.
-  //  Legs: modest ±3 drift — never cross center. Passing frames: drift=0,
-  //  legH-1 = very slight knee bend.
+  //  Arms swing laterally (Dx) away from the body on the forward swing and
+  //  pull back in on the back-swing. Opposite arm↔leg pairing.
+  //  Passing frames keep arms at a moderate outward position so they’re always
+  //  visible — never flush against the torso.
+  //  Legs: ±5 drift for a clear stride.
   { label: 'Walk', frames: [
-    // F1 — right contact: R foot forward, L foot back
-    { torsoSquash:0, lArmDx:0, lArmDy:-4, rArmDx:0, rArmDy:+3, lLegDx:-3, rLegDx:+3, legH:NORMAL_LEG_H   },
-    // F2 — passing: feet under hips, slight knee bend
-    { torsoSquash:0, lArmDx:0, lArmDy: 1, rArmDx:0, rArmDy: 1, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
-    // F3 — left contact: L foot forward, R foot back
-    { torsoSquash:0, lArmDx:0, lArmDy:+3, rArmDx:0, rArmDy:-4, lLegDx:+3, rLegDx:-3, legH:NORMAL_LEG_H   },
+    // F1 — right contact: L arm swings forward (out+up), R arm back (in+down)
+    { torsoSquash:0, lArmDx:-5, lArmDy:-3, rArmDx:3, rArmDy:3,  lLegDx:-5, rLegDx:+5, legH:NORMAL_LEG_H   },
+    // F2 — passing: arms moderate outward, legs under hips, slight knee bend
+    { torsoSquash:0, lArmDx:-2, lArmDy: 0, rArmDx:2, rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
+    // F3 — left contact: R arm swings forward (out+up), L arm back (in+down)
+    { torsoSquash:0, lArmDx:-3, lArmDy: 3, rArmDx:5, rArmDy:-3, lLegDx:+5, rLegDx:-5, legH:NORMAL_LEG_H   },
     // F4 — passing: same as F2
-    { torsoSquash:0, lArmDx:0, lArmDy: 1, rArmDx:0, rArmDy: 1, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
+    { torsoSquash:0, lArmDx:-2, lArmDy: 0, rArmDx:2, rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
   ]},
 
   //
