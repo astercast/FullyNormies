@@ -115,16 +115,6 @@ function SpriteCard({ s }: { s: Sprite }) {
               ↓ {opt.label}
             </button>
           ))}
-          {/* Fallback direct download link for original image */}
-          <a
-            href={s.url}
-            download
-            style={{ ...btnBase, borderTop: '1px solid var(--line)', padding: '.38rem .6rem', color: 'var(--ink)' }}
-            target="_blank"
-            rel="noopener"
-          >
-            ↓ Original PNG (fallback)
-          </a>
           {s.id !== null && <>
             <div style={{ height: 1, background: 'var(--line)' }} />
             <Link
