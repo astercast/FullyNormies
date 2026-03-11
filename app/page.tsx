@@ -3,15 +3,16 @@ import Link from 'next/link'
 import Nav from './components/Nav'
 import Footer from './components/Footer'
 import { useEffect, useState } from 'react'
-import { drawNormie, upscale } from '@/lib/sprite-engine'
+import { drawNormie, upscale, type Pose, POSES } from '@/lib/sprite-engine'
 
 // ── Strip of demo normies using full-body sprites ──
-const DEMO_IDS = [6793, 1337, 420, 888, 3141, 2048]
+const DEMO_IDS = [6793, 1337, 420, 888, 3141, 2048, 5555, 9001]
 
 // Renders a single full-body normie sprite by calling /api/generate then
-// drawing with the shared sprite engine. Falls back to face image while loading.
+// drawing with the shared sprite engine. Cycles poses when active.
 function HeroSprite({ id, active }: { id: number; active: boolean }) {
-  const [dataUrl, setDataUrl] = useState<string | null>(null)
+  const [frames, setFrames] = useState<Record<Pose, string>>({} as Record<Pose, string>)
+  const [pose, setPose] = useState<Pose>('idle')
 
   useEffect(() => {
     let cancelled = false
@@ -23,23 +24,34 @@ function HeroSprite({ id, active }: { id: number; active: boolean }) {
       .then(r => r.json())
       .then(data => {
         if (cancelled || !data.pixels) return
-        const canvas = upscale(drawNormie(data.pixels, data.traits, 'idle', id), 2)
-        if (!cancelled) setDataUrl(canvas.toDataURL())
+        const f: Record<string, string> = {}
+        for (const p of POSES)
+          f[p] = upscale(drawNormie(data.pixels, data.traits, p, id), 2).toDataURL()
+        if (!cancelled) setFrames(f as Record<Pose, string>)
       })
       .catch(() => {})
     return () => { cancelled = true }
   }, [id])
 
+  // Cycle poses when active
+  useEffect(() => {
+    if (!active) { setPose('idle'); return }
+    let i = 0
+    const t = setInterval(() => { i = (i + 1) % POSES.length; setPose(POSES[i]) }, 900)
+    return () => clearInterval(t)
+  }, [active])
+
+  const src = frames[pose]
+
   return (
     <div style={{ background: '#e3e5e4', border: '1px solid rgba(72,73,75,.15)', padding: 3 }}>
-      {dataUrl ? (
+      {src ? (
         <img
-          src={dataUrl}
-          alt={`Normie #${id}`}
+          src={src}
+          alt={`Normie #${id} ${pose}`}
           style={{ display: 'block', imageRendering: 'pixelated', width: 56, height: 112 }}
         />
       ) : (
-        /* Placeholder while sprite loads — show face image at bottom */
         <div style={{ width: 56, height: 112, position: 'relative' }}>
           <img
             src={`https://api.normies.art/normie/${id}/image.png`}
@@ -74,7 +86,7 @@ function HeroStrip() {
         ))}
       </div>
       <div style={{ fontSize: '.44rem', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--ink-muted)' }}>
-        #{DEMO_IDS[active]} · Live from chain
+        #{DEMO_IDS[active]} · 3M+ unique bodies
       </div>
     </div>
   )
@@ -119,7 +131,7 @@ export default function Home() {
                 </div>
 
                 <p style={{ fontSize: 'clamp(.75rem,1.8vw,1rem)', color: 'var(--ink-mid)', lineHeight: 1.8, marginBottom: 'clamp(1.4rem,3.5vw,2.5rem)' }}>
-                  Turn any Normie NFT into a full-body pixel art game sprite.
+                  3M+ unique body combinations. 12 shirts, 8 pants, 5 shoes, 5 builds — every Normie gets a one-of-a-kind full-body sprite from on-chain traits.
                 </p>
 
                 <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap' }}>
@@ -186,9 +198,9 @@ export default function Home() {
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: '1.5rem' }}>
               <div>
                 <div style={{ fontSize: 'clamp(1.2rem,4vw,2.2rem)', fontWeight: 900, letterSpacing: '-.04em', color: 'var(--ink)', marginBottom: '.5rem' }}>
-                  10,000 Normies.<br />Infinite sprites.
+                  10,000 Normies.<br />3 million+ bodies.
                 </div>
-                <div style={{ fontSize: '.65rem', color: 'var(--ink-mid)' }}>Every Normie gets a unique body based on their traits.</div>
+                <div style={{ fontSize: '.65rem', color: 'var(--ink-mid)' }}>12 shirts · 8 pants · 5 shoes · 5 builds · 3 torso heights · 3 shoulder widths · 3 leg widths · 4 belts — all from on-chain traits.</div>
               </div>
               <Link href="/engine?id=6793" style={{
                 display: 'inline-block', flexShrink: 0, background: 'var(--ink)', color: 'var(--bg)',
