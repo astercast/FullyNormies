@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
 
     // Upload PNG to Vercel Blob
     const blob = await put(`sprites/normie-${id}-${timestamp}.png`, file, {
+      access: 'private',
       contentType: 'image/png',
     })
 
@@ -24,6 +25,7 @@ export async function POST(req: NextRequest) {
       spriteUrl: blob.url,
       generatedAt: new Date().toISOString(),
     }), {
+      access: 'private',
       contentType: 'application/json',
     })
 
