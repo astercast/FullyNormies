@@ -8,7 +8,9 @@ export async function GET(req: NextRequest) {
 
   // Add Authorization header for private blob access
   const token = process.env.BLOB_READ_WRITE_TOKEN
-  if (!token) return new NextResponse('Missing blob token', { status: 500 })
+  if (!token) {
+    return new NextResponse('Token missing in env', { status: 500 })
+  }
 
   const res = await fetch(url, {
     headers: {
