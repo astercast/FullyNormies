@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
   // Stream the image to the client
   const headers = new Headers(res.headers)
   headers.delete('set-cookie')
+  headers.set('Access-Control-Allow-Origin', '*')
   return new NextResponse(res.body, {
     status: res.status,
     headers,
