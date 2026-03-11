@@ -60,7 +60,7 @@ function SpriteCard({ s }: { s: Sprite }) {
         title={s.id !== null ? `Normie #${s.id} — click to download` : 'Click to download'}
       >
         <img
-          src={s.url}
+          src={`/api/proxy-sprite?url=${encodeURIComponent(s.url)}`}
           alt={s.id !== null ? `Normie #${s.id}` : 'Sprite'}
           loading="lazy"
           style={{ width: '100%', height: '100%', imageRendering: 'pixelated', objectFit: 'contain', display: 'block' }}
