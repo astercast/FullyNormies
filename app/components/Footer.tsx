@@ -18,6 +18,8 @@ export default function Footer() {
             style={{ fontSize: '.5rem', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--ink-muted)', textDecoration: 'none' }}>
             normies.art ↗
           </a>
+          <span style={{ color: 'var(--ink-muted)', fontSize: '.5rem' }}>·</span>
+          <a href="/admin" style={{ fontSize: '.5rem', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--ink-muted)', textDecoration: 'none' }}>admin</a>
         </div>
         <div style={{ fontSize: '.5rem', letterSpacing: '.06em', color: 'var(--ink-muted)', whiteSpace: 'nowrap' }}>
           Built by{' '}
