@@ -174,40 +174,48 @@ export function drawNormie(
   const cx       = Math.floor(SW / 2)   // 20
 
   // ── Build & proportions ───────────────────────────────────────────────────
-  const buildLvl  = s2 % 4   // 0=slim  1=lean  2=medium  3=broad (capped at 4 levels)
-  const baseTW    = isAlien ? 7 : isYoung ? 8 : isCat ? 9 : isZombie ? 9 : isOld ? 10 : 10
-  const tW        = baseTW + buildLvl     // 7–13 px
+  const buildLvl  = s2 % 4   // 0=slim  1=lean  2=medium  3=broad
+  const baseTW    = isAlien ? 6 : isYoung ? 7 : isCat ? 8 : isZombie ? 8 : isOld ? 8 : 8
+  const tW        = baseTW + buildLvl     // 6–11 px
   const tX        = cx - Math.floor(tW / 2)
 
-  // Torso height: 3 levels
+  // Torso height: 3 levels (shorter = less dress-like)
   const torsoVar  = v0 % 3               // 0=short  1=normal  2=tall
-  const tH        = [9, 11, 13][torsoVar] - cfg.torsoSquash
+  const tH        = [7, 8, 10][torsoVar] - cfg.torsoSquash
 
-  // Shoulder overhang: 3 widths (reduced to avoid blocky look)
-  const shOff     = [0, 1, 2][v1 % 3]    // narrow / normal / broad
+  // Shoulder overhang: only 2 levels, subtle
+  const shOff     = [0, 1][v1 % 2]       // none / slight
 
-  // Leg width: 3 thicknesses
-  const legW      = [3, 4, 5][v2 % 3]    // thin / normal / thick
-  const legGap    = 2
+  // Leg width: thin or normal only — no thick
+  const legW      = [2, 3][v2 % 2]       // thin / normal
+  const legGap    = 3                    // bigger gap = clearly separate legs
   const legSpan   = legW * 2 + legGap
+
+  // Arm width: 1px slim builds, 2px broader builds
+  const armW      = buildLvl >= 2 ? 2 : 1
 
   // Style selectors
   const shoeType    = s3 % 5              // 5 shoe styles
   const pantsDetail = s1 % 8              // 8 pants styles
   const beltType    = v4 % 4              // 4 belt styles
 
-  // ── HEAD (rows 0–27) ─ head sits directly on body, no explicit neck ───────
+  // ── NECK (1px connector between head and shoulders) ───────────────────────
+  const neckW = 3
+  const neckX = cx - 1
+  for (let x = neckX; x < neckX + neckW; x++) set(x, HR, true)
+
+  // ── SHOULDER ─────────────────────────────────────────────────────────────
+  const shW  = tW + shOff
+  const shX  = cx - Math.floor(shW / 2)
+  for (let x = shX; x < shX + shW; x++) set(x, HR + 1, true)
+
+  // ── HEAD (rows 0–27) ─────────────────────────────────────────────────────
   for (let r = 0; r < HR; r++)
     for (let c = 0; c < SW; c++)
       if (pixels[r * SW + c] === '1') set(c, r, true)
 
-  // ── SHOULDER ──────────────────────────────────────────────────────────────
-  const shW  = tW + shOff
-  const shX  = cx - Math.floor(shW / 2)
-  for (let x = shX; x < shX + shW; x++) set(x, HR, true)
-
-  // ── TORSO ─────────────────────────────────────────────────────────────────
-  const tY = HR + 1
+  // ── TORSO (starts 2 rows below head: row HR+2) ───────────────────────────
+  const tY = HR + 2
   for (let y = 0; y < tH; y++)
     for (let x = tX; x < tX + tW; x++) set(x, tY + y, true)
 
@@ -309,12 +317,11 @@ export function drawNormie(
   }
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armW  = 2
-  const armH  = [6, 8, 10][torsoVar]     // arm length tracks torso height
-  const handW = 2, handH = 2
-  const lArmX = tX - armW
-  const rArmX = tX + tW
-  const armY0 = HR
+  const armH  = [5, 7, 8][torsoVar]      // arm length tracks torso height
+  const handW = armW, handH = 2
+  const lArmX = shX - armW               // arms hang from edge of shoulder
+  const rArmX = shX + shW
+  const armY0 = HR + 1                   // arms start at shoulder row
 
   function fillArm(rootX: number, dx: number, dy: number) {
     for (let s = 0; s < armH; s++) {
@@ -337,21 +344,16 @@ export function drawNormie(
     for (let w = 0; w < armW; w++) { set(lArmX + w, armY0, false); set(rArmX + w, armY0, false) }
   }
 
-  // ── HIP / PELVIS — keep same width as torso, no hip-flare ─────────────────
+  // ── HIP — single transition row, same width as torso ─────────────────────
   const hipY = tY + tH + 1   // one row below belt
   for (let x = tX; x < tX + tW; x++) set(x, hipY, true)
-  const pelvisW = Math.max(legSpan + 2, tW)
-  const pelvisX = cx - Math.floor(pelvisW / 2)
-  for (let x = pelvisX; x < pelvisX + pelvisW; x++) set(x, hipY + 1, true)
 
-  // ── LEGS (8 pants × 3 widths × 5 shoes) ──────────────────────────────────
+  // ── LEGS ─────────────────────────────────────────────────────────────────
   const lLegX = cx - Math.floor(legSpan / 2)
   const rLegX = lLegX + legW + legGap
-  const legY0 = hipY + 2  // two rows below hip
+  const legY0 = hipY + 1   // legs start immediately after hip row
 
-  // Crotch fill
-  for (let s = 0; s < 2; s++)
-    for (let x = lLegX + legW; x < rLegX; x++) set(x, legY0 + s, true)
+  // No crotch fill — the gap separates legs cleanly
 
   function fillLeg(baseX: number, drift: number, lh: number) {
     for (let s = 0; s < lh; s++) {
