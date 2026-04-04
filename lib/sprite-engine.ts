@@ -191,24 +191,24 @@ export function drawNormie(
   // ── Build & proportions ───────────────────────────────────────────────────
   // 5 build levels for more variety: 0=very slim, 1=slim, 2=medium, 3=broad, 4=stocky
   const buildLvl  = s2 % 5
-  const baseTW    = isAlien ? 5 : isYoung ? 6 : isCat ? 7 : isZombie ? 7 : isOld ? 7 : 7
-  const tW        = baseTW + buildLvl     // 5–11 px — wide variety
+  const baseTW    = isAlien ? 6 : isYoung ? 7 : isCat ? 8 : isZombie ? 8 : isOld ? 8 : 8
+  const tW        = baseTW + buildLvl     // 8–12 px — wide variety
   const tX        = cx - Math.floor(tW / 2)
 
   // Torso height: 3 levels, kept compact so legs don't look too long
   const torsoVar  = v0 % 3               // 0=short  1=medium  2=tall
-  const tH        = [6, 8, 9][torsoVar] - cfg.torsoSquash
+  const tH        = [7, 9, 10][torsoVar] - cfg.torsoSquash
 
   // Shoulder overhang: 3 levels, slight
   const shOff     = [0, 1, 2][v1 % 3]    // none / 1px / 2px
 
-  // Leg width: always thin (2px) — stockier builds have wider torso, not legs
+  // Leg width: always 2px — stockier builds have wider torso, not legs
   const legW      = 2
-  const legGap    = Math.max(3, tW - 4)  // gap scales with torso width
+  const legGap    = Math.max(4, tW - 4)  // gap scales with torso width
   const legSpan   = legW * 2 + legGap
 
-  // Arm width: 1px most builds, 2px for broad/stocky
-  const armW      = buildLvl >= 3 ? 2 : 1
+  // Arm width: 1px for slim builds, 2px for medium+
+  const armW      = buildLvl >= 2 ? 2 : 1
 
   // Style selectors
   const shoeType    = s3 % 5              // 5 shoe styles
@@ -333,8 +333,8 @@ export function drawNormie(
   }
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armH  = [3, 4, 4][torsoVar]      // arm length tracks torso, kept short
-  const handW = armW, handH = 1
+  const armH  = [4, 5, 5][torsoVar]      // arm length tracks torso
+  const handW = armW, handH = 2
   const lArmX = shX - armW               // arms hang from edge of shoulder
   const rArmX = shX + shW
   const armY0 = HR + 1                   // arms start at shoulder row
