@@ -73,9 +73,13 @@ function HeroStrip() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
+      <style>{`
+        .fn-strip-item:nth-child(n+5) { display: none; }
+        @media(min-width:700px){ .fn-strip-item:nth-child(n+5) { display: block; } }
+      `}</style>
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
         {DEMO_IDS.map((id, i) => (
-          <div key={id} style={{
+          <div key={id} className="fn-strip-item" style={{
             transform: active === i ? 'translateY(-6px) scale(1.08)' : 'none',
             transition: 'transform .4s cubic-bezier(.34,1.56,.64,1)',
             opacity: active === i ? 1 : 0.45,
@@ -110,42 +114,48 @@ export default function Home() {
       <main style={{ flex: 1 }}>
 
         {/* ── HERO ── */}
-        <section style={{ borderBottom: '1px solid var(--line)', padding: 'clamp(2.5rem,7vw,5rem) 0' }}>
+        <section style={{ borderBottom: '1px solid var(--line)', padding: 'clamp(2rem,5vw,5rem) 0', overflow: 'hidden' }}>
           <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 1.25rem' }}>
-            <style>{`@media(min-width:700px){.fn-hero-inner{flex-direction:row!important;align-items:center!important;justify-content:space-between!important}}`}</style>
-            <div className="fn-hero-inner" style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(2rem,5vw,3.5rem)' }}>
+            <style>{`
+              @media(min-width:700px){
+                .fn-hero-inner{flex-direction:row!important;align-items:center!important;justify-content:space-between!important}
+                .fn-hero-btns a { flex:0 !important; }
+              }
+              .fn-hero-btns { display:flex; gap:.6rem; flex-wrap:wrap; }
+              .fn-hero-btns a { flex:1; text-align:center; }
+            `}</style>
+            <div className="fn-hero-inner" style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(1.8rem,5vw,3.5rem)' }}>
 
               {/* Text */}
-              <div style={{ maxWidth: 520 }}>
-                {/* Digital headline */}
+              <div style={{ maxWidth: 520, width: '100%' }}>
                 <div className="fn-hero-font" style={{
-                  fontSize: 'clamp(1.6rem,6vw,3.2rem)',
+                  fontSize: 'clamp(1.4rem,6vw,3.2rem)',
                   lineHeight: 1.3,
                   letterSpacing: '.04em',
                   color: 'var(--ink)',
-                  marginBottom: 'clamp(1rem,3vw,2rem)',
+                  marginBottom: 'clamp(.8rem,3vw,2rem)',
                 }}>
                   <div>FULL</div>
                   <div>BODY</div>
                   <div style={{ opacity: 0.18 }}>SPRITES.</div>
                 </div>
 
-                <p style={{ fontSize: 'clamp(.75rem,1.8vw,1rem)', color: 'var(--ink-mid)', lineHeight: 1.8, marginBottom: 'clamp(1.4rem,3.5vw,2.5rem)' }}>
-                  3M+ unique body combinations. 12 shirts, 8 pants, 5 shoes, 5 builds — every Normie gets a one-of-a-kind full-body sprite from on-chain traits.
+                <p style={{ fontSize: 'clamp(.82rem,2.2vw,1rem)', color: 'var(--ink-mid)', lineHeight: 1.8, marginBottom: 'clamp(1.2rem,3.5vw,2.5rem)' }}>
+                  3M+ unique body combinations. 12 shirts, 8 pants, 5 shoes — every Normie gets a one-of-a-kind full-body sprite from on-chain traits.
                 </p>
 
-                <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap' }}>
+                <div className="fn-hero-btns">
                   <Link href="/engine?id=6793" style={{
-                    display: 'inline-block', background: 'var(--ink)', color: 'var(--bg)',
+                    display: 'block', background: 'var(--ink)', color: 'var(--bg)',
                     border: '1px solid var(--ink)', fontFamily: 'inherit', fontWeight: 700,
-                    fontSize: '.6rem', letterSpacing: '.13em', textTransform: 'uppercase',
-                    padding: '.65rem 1.4rem', textDecoration: 'none',
+                    fontSize: '.68rem', letterSpacing: '.13em', textTransform: 'uppercase',
+                    padding: '.75rem 1.4rem', textDecoration: 'none',
                   }}>▶ Open Sprite Engine</Link>
                   <Link href="/gallery" style={{
-                    display: 'inline-block', background: 'transparent', color: 'var(--ink)',
+                    display: 'block', background: 'transparent', color: 'var(--ink)',
                     border: '1px solid var(--line)', fontFamily: 'inherit', fontWeight: 700,
-                    fontSize: '.6rem', letterSpacing: '.13em', textTransform: 'uppercase',
-                    padding: '.65rem 1.4rem', textDecoration: 'none',
+                    fontSize: '.68rem', letterSpacing: '.13em', textTransform: 'uppercase',
+                    padding: '.75rem 1.4rem', textDecoration: 'none',
                   }}>View Gallery →</Link>
                 </div>
               </div>
@@ -176,10 +186,11 @@ export default function Home() {
         <section style={{ borderBottom: '1px solid var(--line)', padding: 'clamp(2rem,5vw,4rem) 0' }}>
           <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 1.25rem' }}>
             <div style={{ fontSize: '.52rem', letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: '1.8rem' }}>How it works</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 0 }}>
+            <style>{`@media(min-width:640px){.fn-features-grid{grid-template-columns:repeat(2,1fr)!important}}@media(min-width:960px){.fn-features-grid{grid-template-columns:repeat(3,1fr)!important}}`}</style>
+            <div className="fn-features-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 0 }}>
               {features.map((f, i) => (
                 <div key={i} style={{ padding: '1.2rem 0', borderTop: '1px solid var(--line-soft)' }}>
-                  <div style={{ display: 'flex', gap: '.75rem', paddingRight: '1.5rem' }}>
+                  <div style={{ display: 'flex', gap: '.75rem', paddingRight: '1rem' }}>
                     <div style={{ fontSize: '.9rem', fontWeight: 900, opacity: .12, lineHeight: 1, minWidth: '1.4rem', flexShrink: 0, color: 'var(--ink)' }}>{f.n}</div>
                     <div>
                       <div style={{ fontSize: '.68rem', fontWeight: 700, marginBottom: '.2rem', color: 'var(--ink)' }}>{f.title}</div>
