@@ -352,7 +352,21 @@ function EngineInner() {
                 )}
               </div>
 
-              {normName && <div style={{ fontSize:'1.6rem', fontWeight:900, letterSpacing:'-.05em', lineHeight:1, marginBottom:'.9rem' }}>{normName}</div>}
+              {normName && <div style={{ fontSize:'1.6rem', fontWeight:900, letterSpacing:'-.05em', lineHeight:1, marginBottom:'.5rem' }}>{normName}</div>}
+              {currentId != null && loadState === 'done' && (
+                <div style={{ display:'flex', gap:'.45rem', marginBottom:'.9rem', flexWrap:'wrap' }}>
+                  <a
+                    href={`https://normiesarchive.xyz/normie/${currentId}`}
+                    target="_blank" rel="noopener"
+                    style={{ fontSize:'.52rem', letterSpacing:'.09em', textTransform:'uppercase', color:'var(--ink-muted)', textDecoration:'none', border:'1px solid var(--line-soft)', padding:'.18rem .44rem' }}
+                  >Archive ↗</a>
+                  <a
+                    href={`https://opensea.io/assets/ethereum/0x9Eb6E2025B64f340691e424b7fe7022fFDE12438/${currentId}`}
+                    target="_blank" rel="noopener"
+                    style={{ fontSize:'.52rem', letterSpacing:'.09em', textTransform:'uppercase', color:'var(--ink-muted)', textDecoration:'none', border:'1px solid var(--line-soft)', padding:'.18rem .44rem' }}
+                  >OpenSea ↗</a>
+                </div>
+              )}
 
               <span style={S.lbl}>Traits</span>
               <div style={{ display:'grid', gridTemplateColumns:'auto 1fr' }}>

@@ -174,17 +174,17 @@ export function drawNormie(
   const cx       = Math.floor(SW / 2)   // 20
 
   // ── Build & proportions ───────────────────────────────────────────────────
-  const buildLvl  = s2 % 5   // 0=slim  1=lean  2=medium  3=broad  4=stocky
+  const buildLvl  = s2 % 4   // 0=slim  1=lean  2=medium  3=broad (capped at 4 levels)
   const baseTW    = isAlien ? 7 : isYoung ? 8 : isCat ? 9 : isZombie ? 9 : isOld ? 10 : 10
-  const tW        = baseTW + buildLvl     // 7–14 px
+  const tW        = baseTW + buildLvl     // 7–13 px
   const tX        = cx - Math.floor(tW / 2)
 
   // Torso height: 3 levels
   const torsoVar  = v0 % 3               // 0=short  1=normal  2=tall
-  const tH        = [8, 10, 12][torsoVar] - cfg.torsoSquash
+  const tH        = [9, 11, 13][torsoVar] - cfg.torsoSquash
 
-  // Shoulder overhang: 3 widths
-  const shOff     = [0, 2, 4][v1 % 3]    // narrow / normal / broad
+  // Shoulder overhang: 3 widths (reduced to avoid blocky look)
+  const shOff     = [0, 1, 2][v1 % 3]    // narrow / normal / broad
 
   // Leg width: 3 thicknesses
   const legW      = [3, 4, 5][v2 % 3]    // thin / normal / thick
@@ -291,24 +291,21 @@ export function drawNormie(
     }
   }
 
-  // ── BELT (4 styles) ──────────────────────────────────────────────────────
-  const beltY = tY + tH - 1
+  // ── BELT (4 styles) — flush with torso, no waist-cinch extension ───────────
+  const beltY = tY + tH
   if (beltType === 0) {
-    // Standard — buckle gap
-    for (let x = tX - 1; x <= tX + tW; x++) set(x, beltY, true)
+    // Standard — solid belt flush with torso, buckle gap in centre
+    for (let x = tX; x < tX + tW; x++) set(x, beltY, true)
     set(cx, beltY, false)
   } else if (beltType === 1) {
-    // Double belt
-    for (let x = tX - 1; x <= tX + tW; x++) set(x, beltY, true)
-    if (beltY - 1 >= tY) for (let x = tX - 1; x <= tX + tW; x++) set(x, beltY - 1, true)
-    set(cx, beltY, false)
-  } else if (beltType === 2) {
-    // Studded belt
-    for (let x = tX - 1; x <= tX + tW; x++) set(x, beltY, true)
-    for (let x = tX; x < tX + tW; x += 2) set(x, beltY, false)
-  } else {
-    // No belt — simple bottom edge
+    // Flat waistband — single solid row, no buckle
     for (let x = tX; x < tX + tW; x++) set(x, beltY, true)
+  } else if (beltType === 2) {
+    // Studded belt — flush with torso
+    for (let x = tX; x < tX + tW; x++) set(x, beltY, true)
+    for (let x = tX + 1; x < tX + tW - 1; x += 2) set(x, beltY, false)
+  } else {
+    // No belt
   }
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
@@ -340,9 +337,9 @@ export function drawNormie(
     for (let w = 0; w < armW; w++) { set(lArmX + w, armY0, false); set(rArmX + w, armY0, false) }
   }
 
-  // ── HIP / PELVIS ─────────────────────────────────────────────────────────
-  const hipY = tY + tH
-  for (let x = tX - 1; x <= tX + tW; x++) set(x, hipY, true)
+  // ── HIP / PELVIS — keep same width as torso, no hip-flare ─────────────────
+  const hipY = tY + tH + 1   // one row below belt
+  for (let x = tX; x < tX + tW; x++) set(x, hipY, true)
   const pelvisW = Math.max(legSpan + 2, tW)
   const pelvisX = cx - Math.floor(pelvisW / 2)
   for (let x = pelvisX; x < pelvisX + pelvisW; x++) set(x, hipY + 1, true)
@@ -350,7 +347,7 @@ export function drawNormie(
   // ── LEGS (8 pants × 3 widths × 5 shoes) ──────────────────────────────────
   const lLegX = cx - Math.floor(legSpan / 2)
   const rLegX = lLegX + legW + legGap
-  const legY0 = hipY + 2
+  const legY0 = hipY + 2  // two rows below hip
 
   // Crotch fill
   for (let s = 0; s < 2; s++)
