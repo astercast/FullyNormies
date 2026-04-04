@@ -196,10 +196,10 @@ function EngineInner() {
     }, 'image/png')
   }
 
-  // dlSheet — 16-frame animation sheet (4 clips × 4 keyframes), generated on-the-fly
+  // dlSheet — 24-frame animation sheet (3 clips × 8 keyframes), generated on-the-fly
   function dlSheet(scale: number, transparent = false) {
     if (!pixels || !normTraits) return
-    const cols = 4, rows = ANIM_CLIPS.length
+    const cols = 8, rows = ANIM_CLIPS.length
     const fw = SW * scale, fh = SH * scale
     const out = document.createElement('canvas')
     out.width  = fw * cols
@@ -214,7 +214,7 @@ function EngineInner() {
     out.toBlob(b => {
       const a = Object.assign(document.createElement('a'), {
         href: URL.createObjectURL(b!),
-        download: `normie-${currentId}-anim-${fw}x${fh}-12f${transparent?'-t':''}.png`,
+        download: `normie-${currentId}-anim-${fw}x${fh}-24f${transparent?'-t':''}.png`,
       })
       a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000)
     }, 'image/png')
@@ -253,9 +253,9 @@ function EngineInner() {
     { label: `Frame: ${SW*2}×${SH*2}px`,                action: () => dlFrame(activePose, 2) },
     { label: `Frame: ${SW*4}×${SH*4}px`,                action: () => dlFrame(activePose, 4) },
     { label: `Frame: ${SW*4}×${SH*4}px transparent`,    action: () => dlFrame(activePose, 4, true) },
-    { label: `Sheet: ${SW}px · 3×4 · 12 frames · native`, action: () => dlSheet(1) },
-    { label: `Sheet: ${SW*2}px · 3×4 · 12 frames`,       action: () => dlSheet(2) },
-    { label: `Sheet: ${SW*4}px · 3×4 · 12 frames`,       action: () => dlSheet(4) },
+    { label: `Sheet: ${SW}px · 3×8 · 24 frames · native`, action: () => dlSheet(1) },
+    { label: `Sheet: ${SW*2}px · 3×8 · 24 frames`,       action: () => dlSheet(2) },
+    { label: `Sheet: ${SW*4}px · 3×8 · 24 frames`,       action: () => dlSheet(4) },
     { label: `Sheet: ${SW*4}px · transparent`,           action: () => dlSheet(4, true) },
   ] : []
 
@@ -455,7 +455,7 @@ function EngineInner() {
                         <button key={i} style={{ ...S.btn, width:'100%', borderWidth:0, borderBottom:'1px solid var(--line-soft)', justifyContent:'flex-start', fontSize:'.6rem', padding:'.4rem .8rem' }}
                           onClick={() => { o.action(); setDlOpen(false) }}>{o.label}</button>
                       ))}
-                      <div style={{ padding:'.28rem .6rem', fontSize:'.48rem', letterSpacing:'.1em', textTransform:'uppercase', color:'var(--ink-muted)', borderBottom:'1px solid var(--line-soft)', borderTop:'1px solid var(--line-soft)', marginTop:'.1rem' }}>Animation Sheet — 16 frames (4×4)</div>
+                      <div style={{ padding:'.28rem .6rem', fontSize:'.48rem', letterSpacing:'.1em', textTransform:'uppercase', color:'var(--ink-muted)', borderBottom:'1px solid var(--line-soft)', borderTop:'1px solid var(--line-soft)', marginTop:'.1rem' }}>Animation Sheet — 24 frames (8×3)</div>
                       {dlOptions.slice(4).map((o,i) => (
                         <button key={i+4} style={{ ...S.btn, width:'100%', borderWidth:0, borderBottom:'1px solid var(--line-soft)', justifyContent:'flex-start', fontSize:'.6rem', padding:'.4rem .8rem' }}
                           onClick={() => { o.action(); setDlOpen(false) }}>{o.label}</button>

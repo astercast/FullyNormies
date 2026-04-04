@@ -39,21 +39,24 @@ export const POSE_CFG: Record<Pose, PoseCfg> = {
 }
 
 // =============================================================================
-//  ANIMATION CLIPS  —  3 clips × 4 keyframes = 12-frame downloadable sheet
+//  ANIMATION CLIPS  —  3 clips × 8 keyframes = 24-frame downloadable sheet
 //
 //  Walk biomechanics: opposite arm & leg swing together.
 //  Character walks RIGHT. Positive leg-drift = foot goes right (forward).
-//  "Contact" frames: feet fully spread (large drift). "Down" frames: feet
-//  under body (small drift), legH–2 to suggest bent knees on weight-acceptance.
+//  Full 8-frame stride: contact → loading → passing → toe-off × 2 sides.
 // =============================================================================
 export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
   //
   // ── IDLE  (gentle breathing sway) ─────────────────────────────────────────
   { label: 'Idle', frames: [
-    { torsoSquash:0, lArmDx:-1, lArmDy:0,  rArmDx:1,  rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
-    { torsoSquash:0, lArmDx:-1, lArmDy:1,  rArmDx:1,  rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
-    { torsoSquash:0, lArmDx:-1, lArmDy:0,  rArmDx:1,  rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
-    { torsoSquash:0, lArmDx:-1, lArmDy:1,  rArmDx:1,  rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // neutral
+    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // hold
+    { torsoSquash:0, lArmDx:-1, lArmDy: 1, rArmDx:1, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // exhale - arms drop
+    { torsoSquash:0, lArmDx:-1, lArmDy: 1, rArmDx:1, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // exhale hold
+    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // inhale start
+    { torsoSquash:0, lArmDx:-1, lArmDy:-1, rArmDx:1, rArmDy:-1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // inhale - arms rise
+    { torsoSquash:0, lArmDx:-1, lArmDy:-1, rArmDx:1, rArmDy:-1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // inhale hold
+    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // return neutral
   ]},
 
   //
@@ -64,23 +67,35 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
   //  visible — never flush against the torso.
   //  Legs: ±5 drift for a clear stride.
   { label: 'Walk', frames: [
-    // F1 — right contact: L arm forward, R arm back
+    // F1 - right heel strike
     { torsoSquash:0, lArmDx:-3, lArmDy:-2, rArmDx:2, rArmDy:2,  lLegDx:-3, rLegDx:+3, legH:NORMAL_LEG_H   },
-    // F2 — passing: arms at sides, legs together, slight knee bend
+    // F2 - right loading
+    { torsoSquash:0, lArmDx:-2, lArmDy:-1, rArmDx:2, rArmDy:1,  lLegDx:-2, rLegDx:+2, legH:NORMAL_LEG_H   },
+    // F3 - right passing: legs together, slight knee bend
     { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
-    // F3 — left contact: R arm forward, L arm back
+    // F4 - right toe-off: legs spreading toward left contact
+    { torsoSquash:0, lArmDx:-2, lArmDy: 1, rArmDx:2, rArmDy:-1, lLegDx:+2, rLegDx:-2, legH:NORMAL_LEG_H-1 },
+    // F5 - left heel strike (mirror of F1)
     { torsoSquash:0, lArmDx:-2, lArmDy: 2, rArmDx:3, rArmDy:-2, lLegDx:+3, rLegDx:-3, legH:NORMAL_LEG_H   },
-    // F4 — passing (mirror of F2)
+    // F6 - left loading
+    { torsoSquash:0, lArmDx:-2, lArmDy: 1, rArmDx:2, rArmDy:-1, lLegDx:+2, rLegDx:-2, legH:NORMAL_LEG_H   },
+    // F7 - left passing: legs together, slight knee bend
     { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
+    // F8 - left toe-off: legs spreading back toward right contact
+    { torsoSquash:0, lArmDx:-2, lArmDy:-1, rArmDx:2, rArmDy:1,  lLegDx:-2, rLegDx:+2, legH:NORMAL_LEG_H   },
   ]},
 
   //
   // ── CROUCH  (enter → hold × 2 → rise) ─────────────────────────────────────
   { label: 'Crouch', frames: [
-    { torsoSquash:1, lArmDx:-1, lArmDy: 2, rArmDx: 1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:6 },
-    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx: 2, rArmDy: 3, lLegDx: 0, rLegDx: 0, legH:4 },
-    { torsoSquash:2, lArmDx:-2, lArmDy: 4, rArmDx: 2, rArmDy: 4, lLegDx: 0, rLegDx: 0, legH:4 },
-    { torsoSquash:1, lArmDx:-1, lArmDy: 2, rArmDx: 1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:6 },
+    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H   }, // stand
+    { torsoSquash:0, lArmDx:-1, lArmDy: 1, rArmDx:1, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H-1 }, // begin descent
+    { torsoSquash:1, lArmDx:-2, lArmDy: 2, rArmDx:2, rArmDy: 2, lLegDx:0, rLegDx:0, legH:6 },              // mid descent
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:4 },              // full crouch
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:4 },              // hold
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:4 },              // hold
+    { torsoSquash:1, lArmDx:-2, lArmDy: 2, rArmDx:2, rArmDy: 2, lLegDx:0, rLegDx:0, legH:6 },              // mid rise
+    { torsoSquash:0, lArmDx:-1, lArmDy: 1, rArmDx:1, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H-1 }, // nearly up
   ]},
 ]
 
@@ -318,8 +333,8 @@ export function drawNormie(
   }
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armH  = [5, 6, 7][torsoVar]      // arm length tracks torso, kept short
-  const handW = armW, handH = 2
+  const armH  = [3, 4, 4][torsoVar]      // arm length tracks torso, kept short
+  const handW = armW, handH = 1
   const lArmX = shX - armW               // arms hang from edge of shoulder
   const rArmX = shX + shW
   const armY0 = HR + 1                   // arms start at shoulder row
@@ -407,14 +422,14 @@ export function upscale(src: HTMLCanvasElement, scale: number): HTMLCanvasElemen
 }
 
 // -- Animation sheet ----------------------------------------------------------
-// 12-frame sheet: 3 clips × 4 keyframes, each row = one animation.
+// 24-frame sheet: 3 clips × 8 keyframes, each row = one animation.
 export function makeAnimSheet(
   pix: string,
   traits: TraitsData,
   tokenId: number | null,
   scale = 1
 ): HTMLCanvasElement {
-  const cols = 4, rows = ANIM_CLIPS.length
+  const cols = 8, rows = ANIM_CLIPS.length
   const fw = SW * scale, fh = SH * scale
   const sheet = document.createElement('canvas')
   sheet.width  = fw * cols
