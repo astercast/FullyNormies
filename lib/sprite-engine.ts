@@ -12,7 +12,7 @@ export const SW  = 40   // sprite width  (matches Normie head width)
 export const SH  = 80   // sprite height (28 head + body)
 export const HR  = 28   // head rows (captures face, chin, most beard content)
 export const SCL = 5    // display upscale  (40×80 → 200×400)
-export const NORMAL_LEG_H = 12
+export const NORMAL_LEG_H = 8
 
 // -- Types --------------------------------------------------------------------
 export interface TraitAttr { trait_type: string; value: string }
@@ -31,11 +31,11 @@ export interface PoseCfg {
 export const POSES: Pose[] = ['idle', 'walk', 'crouch']
 export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', crouch:'Crouch' }
 
-// Reference poses — used for the 3 display cards
+// Reference poses
 export const POSE_CFG: Record<Pose, PoseCfg> = {
-  idle:   { torsoSquash:0, lArmDx:-1, lArmDy:1,  rArmDx:1,  rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
-  walk:   { torsoSquash:0, lArmDx:-4, lArmDy:-2, rArmDx:3,  rArmDy:2,  lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
-  crouch: { torsoSquash:2, lArmDx:-2, lArmDy:3,  rArmDx:2,  rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:6 },
+  idle:   { torsoSquash:0, lArmDx:-1, lArmDy:1,  rArmDx:1, rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+  walk:   { torsoSquash:0, lArmDx:-3, lArmDy:-2, rArmDx:3, rArmDy:2,  lLegDx:-3, rLegDx:+3, legH:NORMAL_LEG_H },
+  crouch: { torsoSquash:2, lArmDx:-2, lArmDy:3,  rArmDx:2, rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:4 },
 }
 
 // =============================================================================
@@ -65,22 +65,22 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
   //  Legs: ±5 drift for a clear stride.
   { label: 'Walk', frames: [
     // F1 — right contact: L arm forward, R arm back
-    { torsoSquash:0, lArmDx:-5, lArmDy:-3, rArmDx:3, rArmDy:2,  lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H   },
+    { torsoSquash:0, lArmDx:-3, lArmDy:-2, rArmDx:2, rArmDy:2,  lLegDx:-3, rLegDx:+3, legH:NORMAL_LEG_H   },
     // F2 — passing: arms at sides, legs together, slight knee bend
-    { torsoSquash:0, lArmDx:-2, lArmDy: 0, rArmDx:2, rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
+    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
     // F3 — left contact: R arm forward, L arm back
-    { torsoSquash:0, lArmDx:-3, lArmDy: 2, rArmDx:5, rArmDy:-3, lLegDx:+4, rLegDx:-4, legH:NORMAL_LEG_H   },
+    { torsoSquash:0, lArmDx:-2, lArmDy: 2, rArmDx:3, rArmDy:-2, lLegDx:+3, rLegDx:-3, legH:NORMAL_LEG_H   },
     // F4 — passing (mirror of F2)
-    { torsoSquash:0, lArmDx:-2, lArmDy: 0, rArmDx:2, rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
+    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
   ]},
 
   //
   // ── CROUCH  (enter → hold × 2 → rise) ─────────────────────────────────────
   { label: 'Crouch', frames: [
-    { torsoSquash:1, lArmDx:-1, lArmDy: 2, rArmDx: 1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:8 },
-    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx: 2, rArmDy: 3, lLegDx: 0, rLegDx: 0, legH:6 },
-    { torsoSquash:2, lArmDx:-2, lArmDy: 4, rArmDx: 2, rArmDy: 4, lLegDx: 0, rLegDx: 0, legH:6 },
-    { torsoSquash:1, lArmDx:-1, lArmDy: 2, rArmDx: 1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:8 },
+    { torsoSquash:1, lArmDx:-1, lArmDy: 2, rArmDx: 1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:6 },
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx: 2, rArmDy: 3, lLegDx: 0, rLegDx: 0, legH:4 },
+    { torsoSquash:2, lArmDx:-2, lArmDy: 4, rArmDx: 2, rArmDy: 4, lLegDx: 0, rLegDx: 0, legH:4 },
+    { torsoSquash:1, lArmDx:-1, lArmDy: 2, rArmDx: 1, rArmDy: 2, lLegDx: 0, rLegDx: 0, legH:6 },
   ]},
 ]
 
@@ -174,25 +174,26 @@ export function drawNormie(
   const cx       = Math.floor(SW / 2)   // 20
 
   // ── Build & proportions ───────────────────────────────────────────────────
-  const buildLvl  = s2 % 4   // 0=slim  1=lean  2=medium  3=broad
-  const baseTW    = isAlien ? 6 : isYoung ? 7 : isCat ? 8 : isZombie ? 8 : isOld ? 8 : 8
-  const tW        = baseTW + buildLvl     // 6–11 px
+  // 5 build levels for more variety: 0=very slim, 1=slim, 2=medium, 3=broad, 4=stocky
+  const buildLvl  = s2 % 5
+  const baseTW    = isAlien ? 5 : isYoung ? 6 : isCat ? 7 : isZombie ? 7 : isOld ? 7 : 7
+  const tW        = baseTW + buildLvl     // 5–11 px — wide variety
   const tX        = cx - Math.floor(tW / 2)
 
-  // Torso height: 3 levels (shorter = less dress-like)
-  const torsoVar  = v0 % 3               // 0=short  1=normal  2=tall
-  const tH        = [7, 8, 10][torsoVar] - cfg.torsoSquash
+  // Torso height: 3 levels, kept compact so legs don't look too long
+  const torsoVar  = v0 % 3               // 0=short  1=medium  2=tall
+  const tH        = [6, 8, 9][torsoVar] - cfg.torsoSquash
 
-  // Shoulder overhang: only 2 levels, subtle
-  const shOff     = [0, 1][v1 % 2]       // none / slight
+  // Shoulder overhang: 3 levels, slight
+  const shOff     = [0, 1, 2][v1 % 3]    // none / 1px / 2px
 
-  // Leg width: thin or normal only — no thick
-  const legW      = [2, 3][v2 % 2]       // thin / normal
-  const legGap    = 3                    // bigger gap = clearly separate legs
+  // Leg width: always thin (2px) — stockier builds have wider torso, not legs
+  const legW      = 2
+  const legGap    = Math.max(3, tW - 4)  // gap scales with torso width
   const legSpan   = legW * 2 + legGap
 
-  // Arm width: 1px slim builds, 2px broader builds
-  const armW      = buildLvl >= 2 ? 2 : 1
+  // Arm width: 1px most builds, 2px for broad/stocky
+  const armW      = buildLvl >= 3 ? 2 : 1
 
   // Style selectors
   const shoeType    = s3 % 5              // 5 shoe styles
@@ -317,7 +318,7 @@ export function drawNormie(
   }
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armH  = [5, 7, 8][torsoVar]      // arm length tracks torso height
+  const armH  = [5, 6, 7][torsoVar]      // arm length tracks torso, kept short
   const handW = armW, handH = 2
   const lArmX = shX - armW               // arms hang from edge of shoulder
   const rArmX = shX + shW
@@ -344,16 +345,17 @@ export function drawNormie(
     for (let w = 0; w < armW; w++) { set(lArmX + w, armY0, false); set(rArmX + w, armY0, false) }
   }
 
-  // ── HIP — single transition row, same width as torso ─────────────────────
+  // ── HIP — narrows to leg width so there's a clear waist-to-leg taper
   const hipY = tY + tH + 1   // one row below belt
+  // Hip row matches torso bottom edge — no extra width
   for (let x = tX; x < tX + tW; x++) set(x, hipY, true)
 
   // ── LEGS ─────────────────────────────────────────────────────────────────
   const lLegX = cx - Math.floor(legSpan / 2)
   const rLegX = lLegX + legW + legGap
-  const legY0 = hipY + 1   // legs start immediately after hip row
+  const legY0 = hipY + 1   // legs start immediately after hip
 
-  // No crotch fill — the gap separates legs cleanly
+  // No crotch fill — the gap cleanly separates legs
 
   function fillLeg(baseX: number, drift: number, lh: number) {
     for (let s = 0; s < lh; s++) {
