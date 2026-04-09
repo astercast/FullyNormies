@@ -191,13 +191,13 @@ export function drawNormie(
   // ── Build & proportions ───────────────────────────────────────────────────
   // 5 build levels: 0=slim, 1=regular, 2=medium, 3=broad, 4=stocky
   const buildLvl = s2 % 5
-  const baseTW   = isAlien ? 10 : isYoung ? 11 : 12
-  const tW       = baseTW + buildLvl          // 12–16 px on a 40px canvas
+  const baseTW   = isAlien ? 8 : isYoung ? 9 : 10
+  const tW       = baseTW + buildLvl          // 10–14 px on a 40px canvas
   const tX       = cx - Math.floor(tW / 2)
 
   // Torso height: 3 levels
   const torsoVar = v0 % 3
-  const tH       = [9, 11, 12][torsoVar] - cfg.torsoSquash
+  const tH       = [8, 10, 11][torsoVar] - cfg.torsoSquash
 
   // Shoulder caps: always overhang torso by at least 2px total
   const shOff    = [2, 3, 4][v1 % 3]
@@ -333,7 +333,7 @@ export function drawNormie(
   }
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armH  = [5, 6, 7][torsoVar]      // arm length matches torso height
+  const armH  = [4, 5, 5][torsoVar]      // arm length matches torso height
   const handW = armW, handH = 2
   const lArmX = shX - armW               // arms hang from edge of shoulder
   const rArmX = shX + shW
