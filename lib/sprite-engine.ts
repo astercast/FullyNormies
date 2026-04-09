@@ -33,7 +33,7 @@ export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', crouc
 
 // Reference poses
 export const POSE_CFG: Record<Pose, PoseCfg> = {
-  idle:   { torsoSquash:0, lArmDx:-1, lArmDy:1,  rArmDx:1, rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
+  idle:   { torsoSquash:0, lArmDx:-2, lArmDy:1,  rArmDx:2, rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
   walk:   { torsoSquash:0, lArmDx:-3, lArmDy:-2, rArmDx:3, rArmDy:2,  lLegDx:-3, rLegDx:+3, legH:NORMAL_LEG_H },
   crouch: { torsoSquash:2, lArmDx:-2, lArmDy:3,  rArmDx:2, rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:4 },
 }
@@ -49,14 +49,14 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
   //
   // ── IDLE  (gentle breathing sway) ─────────────────────────────────────────
   { label: 'Idle', frames: [
-    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // neutral
-    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // hold
-    { torsoSquash:0, lArmDx:-1, lArmDy: 1, rArmDx:1, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // exhale - arms drop
-    { torsoSquash:0, lArmDx:-1, lArmDy: 1, rArmDx:1, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // exhale hold
-    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // inhale start
-    { torsoSquash:0, lArmDx:-1, lArmDy:-1, rArmDx:1, rArmDy:-1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // inhale - arms rise
-    { torsoSquash:0, lArmDx:-1, lArmDy:-1, rArmDx:1, rArmDy:-1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // inhale hold
-    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // return neutral
+    { torsoSquash:0, lArmDx:-2, lArmDy: 0, rArmDx:2, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // neutral
+    { torsoSquash:0, lArmDx:-2, lArmDy: 0, rArmDx:2, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // hold
+    { torsoSquash:0, lArmDx:-2, lArmDy: 1, rArmDx:2, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // exhale - arms drop
+    { torsoSquash:0, lArmDx:-2, lArmDy: 1, rArmDx:2, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // exhale hold
+    { torsoSquash:0, lArmDx:-2, lArmDy: 0, rArmDx:2, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // inhale start
+    { torsoSquash:0, lArmDx:-2, lArmDy:-1, rArmDx:2, rArmDy:-1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // inhale - arms rise
+    { torsoSquash:0, lArmDx:-2, lArmDy:-1, rArmDx:2, rArmDy:-1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // inhale hold
+    { torsoSquash:0, lArmDx:-2, lArmDy: 0, rArmDx:2, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H }, // return neutral
   ]},
 
   //
@@ -191,23 +191,24 @@ export function drawNormie(
   // ── Build & proportions ───────────────────────────────────────────────────
   // 5 build levels: 0=slim, 1=regular, 2=medium, 3=broad, 4=stocky
   const buildLvl = s2 % 5
-  const baseTW   = isAlien ? 8 : isYoung ? 9 : 10
-  const tW       = baseTW + buildLvl          // 10–14 px on a 40px canvas
+  const baseTW   = isAlien ? 7 : isYoung ? 8 : 9
+  const tW       = baseTW + buildLvl          // 9–13 px on a 40px canvas
   const tX       = cx - Math.floor(tW / 2)
 
   // Torso height: 3 levels
   const torsoVar = v0 % 3
   const tH       = [8, 10, 11][torsoVar] - cfg.torsoSquash
 
-  // Shoulder caps: always overhang torso by at least 2px total
-  const shOff    = [2, 3, 4][v1 % 3]
+  // Shoulder: just 1px cap on broad/stocky, otherwise flush with torso
+  // Arms anchor directly off torso sides — no overwide shoulder floating them
+  const shOff    = buildLvl >= 3 ? 1 : 0
 
   // Legs: width scales with build, gap proportional to torso
   const legW     = buildLvl >= 3 ? 3 : 2
-  const legGap   = Math.max(4, tW - 8)
+  const legGap   = Math.max(3, Math.floor(tW / 3))
   const legSpan  = legW * 2 + legGap
 
-  // Arms: always 2px — 1px arms look spindly at any build
+  // Arms: always 2px
   const armW     = 2
 
   // Style selectors
@@ -220,8 +221,8 @@ export function drawNormie(
   const neckX = cx - 1
   for (let x = neckX; x < neckX + neckW; x++) set(x, HR, true)
 
-  // ── SHOULDER ─────────────────────────────────────────────────────────────
-  const shW  = tW + shOff
+  // ── SHOULDER (top of torso + tiny cap for broad builds) ───────────────────
+  const shW  = tW + shOff * 2  // symmetric 1px cap each side on big builds only
   const shX  = cx - Math.floor(shW / 2)
   for (let x = shX; x < shX + shW; x++) set(x, HR + 1, true)
 
@@ -333,10 +334,11 @@ export function drawNormie(
   }
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armH  = [4, 5, 5][torsoVar]      // arm length matches torso height
-  const handW = armW, handH = 2
-  const lArmX = shX - armW               // arms hang from edge of shoulder
-  const rArmX = shX + shW
+  const armH  = [5, 6, 6][torsoVar]      // arm length tracks torso
+  const handW = armW, handH = 1
+  // Anchor arms at torso edges — NOT outside shoulder — so they never float
+  const lArmX = tX - armW
+  const rArmX = tX + tW
   const armY0 = HR + 1                   // arms start at shoulder row
 
   function fillArm(rootX: number, dx: number, dy: number) {
@@ -360,10 +362,11 @@ export function drawNormie(
     for (let w = 0; w < armW; w++) { set(lArmX + w, armY0, false); set(rArmX + w, armY0, false) }
   }
 
-  // ── HIP — narrows to leg width so there's a clear waist-to-leg taper
-  const hipY = tY + tH + 1   // one row below belt
-  // Hip row matches torso bottom edge — no extra width
-  for (let x = tX; x < tX + tW; x++) set(x, hipY, true)
+  // ── HIP — 1px narrower each side than torso for a subtle waist taper ───────────
+  const hipY  = tY + tH + 1
+  const hipW  = Math.max(legSpan, tW - 2)
+  const hipX  = cx - Math.floor(hipW / 2)
+  for (let x = hipX; x < hipX + hipW; x++) set(x, hipY, true)
 
   // ── LEGS ─────────────────────────────────────────────────────────────────
   const lLegX = cx - Math.floor(legSpan / 2)
