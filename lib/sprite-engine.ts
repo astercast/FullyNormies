@@ -189,26 +189,26 @@ export function drawNormie(
   const cx       = Math.floor(SW / 2)   // 20
 
   // ── Build & proportions ───────────────────────────────────────────────────
-  // 5 build levels for more variety: 0=very slim, 1=slim, 2=medium, 3=broad, 4=stocky
-  const buildLvl  = s2 % 5
-  const baseTW    = isAlien ? 6 : isYoung ? 7 : isCat ? 8 : isZombie ? 8 : isOld ? 8 : 8
-  const tW        = baseTW + buildLvl     // 8–12 px — wide variety
-  const tX        = cx - Math.floor(tW / 2)
+  // 5 build levels: 0=slim, 1=regular, 2=medium, 3=broad, 4=stocky
+  const buildLvl = s2 % 5
+  const baseTW   = isAlien ? 10 : isYoung ? 11 : 12
+  const tW       = baseTW + buildLvl          // 12–16 px on a 40px canvas
+  const tX       = cx - Math.floor(tW / 2)
 
-  // Torso height: 3 levels, kept compact so legs don't look too long
-  const torsoVar  = v0 % 3               // 0=short  1=medium  2=tall
-  const tH        = [7, 9, 10][torsoVar] - cfg.torsoSquash
+  // Torso height: 3 levels
+  const torsoVar = v0 % 3
+  const tH       = [9, 11, 12][torsoVar] - cfg.torsoSquash
 
-  // Shoulder overhang: 3 levels, slight
-  const shOff     = [0, 1, 2][v1 % 3]    // none / 1px / 2px
+  // Shoulder caps: always overhang torso by at least 2px total
+  const shOff    = [2, 3, 4][v1 % 3]
 
-  // Leg width: always 2px — stockier builds have wider torso, not legs
-  const legW      = 2
-  const legGap    = Math.max(4, tW - 4)  // gap scales with torso width
-  const legSpan   = legW * 2 + legGap
+  // Legs: width scales with build, gap proportional to torso
+  const legW     = buildLvl >= 3 ? 3 : 2
+  const legGap   = Math.max(4, tW - 8)
+  const legSpan  = legW * 2 + legGap
 
-  // Arm width: 1px for slim builds, 2px for medium+
-  const armW      = buildLvl >= 2 ? 2 : 1
+  // Arms: always 2px — 1px arms look spindly at any build
+  const armW     = 2
 
   // Style selectors
   const shoeType    = s3 % 5              // 5 shoe styles
@@ -333,7 +333,7 @@ export function drawNormie(
   }
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armH  = [4, 5, 5][torsoVar]      // arm length tracks torso
+  const armH  = [5, 6, 7][torsoVar]      // arm length matches torso height
   const handW = armW, handH = 2
   const lArmX = shX - armW               // arms hang from edge of shoulder
   const rArmX = shX + shW
