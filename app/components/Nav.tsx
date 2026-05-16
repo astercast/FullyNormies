@@ -23,9 +23,10 @@ export default function Nav() {
   }
 
   const tabs = [
-    { href: '/',        label: 'Home'          },
-    { href: '/engine',  label: 'Sprite Engine' },
-    { href: '/gallery', label: 'Gallery'       },
+    { href: '/',             label: 'Home'          },
+    { href: '/engine',       label: 'Sprite Engine' },
+    { href: '/gallery',      label: 'Gallery'       },
+    { href: '/how-it-works', label: 'API Docs'      },
   ]
 
   return (

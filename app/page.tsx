@@ -3,63 +3,41 @@ import Link from 'next/link'
 import Nav from './components/Nav'
 import Footer from './components/Footer'
 import { useEffect, useState } from 'react'
-import { drawNormie, upscale, type Pose, POSES } from '@/lib/sprite-engine'
 
-// ── Strip of demo normies using full-body sprites ──
 const DEMO_IDS = [6793, 1337, 420, 888, 3141, 2048, 5555, 9001]
+const BASE = '/api/v1/normies'
 
-// Renders a single full-body normie sprite by calling /api/generate then
-// drawing with the shared sprite engine. Cycles poses when active.
+// Uses the v1 API directly — stable URLs, browser-cached, no canvas required
 function HeroSprite({ id, active }: { id: number; active: boolean }) {
-  const [frames, setFrames] = useState<Record<Pose, string>>({} as Record<Pose, string>)
-  const [pose, setPose] = useState<Pose>('idle')
+  const [frame, setFrame] = useState(0)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
-    let cancelled = false
-    fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ normieId: id }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (cancelled || !data.pixels) return
-        const f: Record<string, string> = {}
-        for (const p of POSES)
-          f[p] = upscale(drawNormie(data.pixels, data.traits, p, id), 2).toDataURL()
-        if (!cancelled) setFrames(f as Record<Pose, string>)
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [id])
-
-  // Cycle poses when active
-  useEffect(() => {
-    if (!active) { setPose('idle'); return }
-    let i = 0
-    const t = setInterval(() => { i = (i + 1) % POSES.length; setPose(POSES[i]) }, 900)
+    if (!active) { setFrame(0); return }
+    const t = setInterval(() => setFrame(f => (f + 1) % 4), 160)
     return () => clearInterval(t)
   }, [active])
 
-  const src = frames[pose]
+  const pose = active ? 'walk' : 'stand'
+  const src  = `${BASE}/${id}/full.png?pose=${pose}&frame=${frame}`
 
   return (
-    <div style={{ background: '#e3e5e4', border: '1px solid rgba(72,73,75,.15)', padding: 3 }}>
-      {src ? (
+    <div style={{ position: 'relative', width: 56, height: 112 }}>
+      {/* Face fallback while full-body loads */}
+      {!loaded && (
         <img
-          src={src}
-          alt={`Normie #${id} ${pose}`}
-          style={{ display: 'block', imageRendering: 'pixelated', width: 56, height: 112 }}
+          src={`${BASE}/${id}/face.png`}
+          alt=""
+          style={{ position: 'absolute', bottom: 0, left: 8, imageRendering: 'pixelated', width: 40, height: 40, opacity: 0.4 }}
         />
-      ) : (
-        <div style={{ width: 56, height: 112, position: 'relative' }}>
-          <img
-            src={`https://api.normies.art/normie/${id}/image.png`}
-            alt={`Normie #${id}`}
-            style={{ display: 'block', imageRendering: 'pixelated', width: 56, height: 56, position: 'absolute', bottom: 0 }}
-          />
-        </div>
       )}
+      <img
+        key={pose}
+        src={src}
+        alt={`Normie #${id}`}
+        onLoad={() => setLoaded(true)}
+        style={{ display: 'block', imageRendering: 'pixelated', width: 56, height: 112, opacity: loaded ? 1 : 0, transition: 'opacity .2s' }}
+      />
     </div>
   )
 }
@@ -67,100 +45,66 @@ function HeroSprite({ id, active }: { id: number; active: boolean }) {
 function HeroStrip() {
   const [active, setActive] = useState(0)
   useEffect(() => {
-    const t = setInterval(() => setActive(a => (a + 1) % DEMO_IDS.length), 2200)
+    const t = setInterval(() => setActive(a => (a + 1) % DEMO_IDS.length), 2400)
     return () => clearInterval(t)
   }, [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
-      <style>{`
-        .fn-strip-item:nth-child(n+5) { display: none; }
-        @media(min-width:700px){ .fn-strip-item:nth-child(n+5) { display: block; } }
-      `}</style>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+      <style>{`.fn-strip-item:nth-child(n+5){display:none}@media(min-width:700px){.fn-strip-item:nth-child(n+5){display:block}}`}</style>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
         {DEMO_IDS.map((id, i) => (
           <div key={id} className="fn-strip-item" style={{
-            transform: active === i ? 'translateY(-6px) scale(1.08)' : 'none',
-            transition: 'transform .4s cubic-bezier(.34,1.56,.64,1)',
-            opacity: active === i ? 1 : 0.45,
-            zIndex: active === i ? 2 : 1,
+            transform: active === i ? 'translateY(-8px) scale(1.1)' : 'none',
+            transition:  'transform .35s cubic-bezier(.34,1.56,.64,1)',
+            opacity: active === i ? 1 : 0.35,
           }}>
             <HeroSprite id={id} active={active === i} />
           </div>
         ))}
       </div>
-      <div style={{ fontSize: '.44rem', letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--ink-muted)' }}>
-        #{DEMO_IDS[active]} · 3M+ unique bodies
+      <div style={{ fontSize: '.42rem', letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--ink-muted)' }}>
+        #{DEMO_IDS[active]} · live from api
       </div>
     </div>
   )
 }
 
 export default function Home() {
-  const features = [
-    { n: '01', title: 'Trait-aware bodies',     body: '3M+ unique body combinations. Every Normie gets a distinct build, torso height, shoulder width, outfit, pants, shoes, belt, and accessories — all derived from on-chain traits.' },
-    { n: '02', title: 'Real face compositing',  body: 'Your Normie\'s actual 40×40 face is pixel-sampled and composited onto the body. Every sunglass, beard, and mask preserved exactly.' },
-    { n: '03', title: 'Strict 2-color palette', body: 'Every pixel snapped to #e3e5e4 / #48494b. No gradients, no blur — pure Normies-style monochrome at every scale.' },
-    { n: '04', title: '24-frame sprite sheets',  body: '3 clips × 8 keyframes in a game-ready 8×3 grid. Slice each row for Idle, Walk, and Crouch animations in Unity or Godot.' },
-    { n: '05', title: 'Community gallery',      body: 'Every saved sprite enters the public gallery. Browse, download at any size, and jump to any Normie\'s archive page.' },
-    { n: '06', title: 'Game-ready exports',     body: 'Download at native 40px, 2×, or 4× scale. Transparent or solid background. Nearest-neighbor — zero quality loss.' },
-  ]
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      {/* Press Start 2P for hero headline */}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');.fn-hero-font{font-family:'Press Start 2P',monospace!important}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');.fn-px{font-family:'Press Start 2P',monospace!important}`}</style>
       <Nav />
       <main style={{ flex: 1 }}>
 
         {/* ── HERO ── */}
-        <section style={{ borderBottom: '1px solid var(--line)', padding: 'clamp(2rem,5vw,5rem) 0', overflow: 'hidden' }}>
+        <section style={{ borderBottom: '1px solid var(--line)', padding: 'clamp(2.5rem,6vw,5.5rem) 0', overflow: 'hidden' }}>
           <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 1.25rem' }}>
-            <style>{`
-              @media(min-width:700px){
-                .fn-hero-inner{flex-direction:row!important;align-items:center!important;justify-content:space-between!important}
-                .fn-hero-btns a { flex:0 !important; }
-              }
-              .fn-hero-btns { display:flex; gap:.6rem; flex-wrap:wrap; }
-              .fn-hero-btns a { flex:1; text-align:center; }
-            `}</style>
-            <div className="fn-hero-inner" style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(1.8rem,5vw,3.5rem)' }}>
+            <style>{`@media(min-width:700px){.fn-hero{flex-direction:row!important;align-items:center!important;justify-content:space-between!important}}`}</style>
+            <div className="fn-hero" style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(2rem,6vw,4rem)' }}>
 
-              {/* Text */}
-              <div style={{ maxWidth: 520, width: '100%' }}>
-                <div className="fn-hero-font" style={{
-                  fontSize: 'clamp(1.4rem,6vw,3.2rem)',
-                  lineHeight: 1.3,
-                  letterSpacing: '.04em',
-                  color: 'var(--ink)',
-                  marginBottom: 'clamp(.8rem,3vw,2rem)',
+              <div style={{ maxWidth: 480 }}>
+                <div className="fn-px" style={{
+                  fontSize: 'clamp(1.25rem,5.5vw,2.8rem)', lineHeight: 1.35,
+                  letterSpacing: '.04em', color: 'var(--ink)', marginBottom: 'clamp(.8rem,3vw,1.8rem)',
                 }}>
                   <div>FULL</div>
                   <div>BODY</div>
-                  <div style={{ opacity: 0.18 }}>SPRITES.</div>
+                  <div style={{ opacity: .15 }}>SPRITES.</div>
                 </div>
 
-                <p style={{ fontSize: 'clamp(.82rem,2.2vw,1rem)', color: 'var(--ink-mid)', lineHeight: 1.8, marginBottom: 'clamp(1.2rem,3.5vw,2.5rem)' }}>
-                  3M+ unique body combinations. 12 shirts, 8 pants, 5 shoes — every Normie gets a one-of-a-kind full-body sprite from on-chain traits.
+                <p style={{ fontSize: 'clamp(.8rem,2vw,.95rem)', color: 'var(--ink-mid)', lineHeight: 1.85, marginBottom: 'clamp(1rem,3vw,2rem)' }}>
+                  Every Normie NFT as a live-generated, game-ready full-body sprite.<br />
+                  One URL. Four poses. Zero setup.
                 </p>
 
-                <div className="fn-hero-btns">
-                  <Link href="/engine?id=6793" style={{
-                    display: 'block', background: 'var(--ink)', color: 'var(--bg)',
-                    border: '1px solid var(--ink)', fontFamily: 'inherit', fontWeight: 700,
-                    fontSize: '.68rem', letterSpacing: '.13em', textTransform: 'uppercase',
-                    padding: '.75rem 1.4rem', textDecoration: 'none',
-                  }}>▶ Open Sprite Engine</Link>
-                  <Link href="/gallery" style={{
-                    display: 'block', background: 'transparent', color: 'var(--ink)',
-                    border: '1px solid var(--line)', fontFamily: 'inherit', fontWeight: 700,
-                    fontSize: '.68rem', letterSpacing: '.13em', textTransform: 'uppercase',
-                    padding: '.75rem 1.4rem', textDecoration: 'none',
-                  }}>View Gallery →</Link>
+                <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+                  <Link href="/engine" style={btnStyle('solid')}>▶ Sprite Engine</Link>
+                  <Link href="/gallery" style={btnStyle('outline')}>Gallery →</Link>
+                  <Link href="/how-it-works" style={btnStyle('outline')}>API Docs →</Link>
                 </div>
               </div>
 
-              {/* Live sprite strip */}
               <div style={{ flexShrink: 0 }}>
                 <HeroStrip />
               </div>
@@ -168,57 +112,44 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ── PALETTE STRIP ── */}
-        <section style={{ borderBottom: '1px solid var(--line)', padding: '1.2rem 0' }}>
-          <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 1.25rem', display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '.5rem', letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--ink-muted)' }}>Normies Palette</span>
-            {[['#e3e5e4','Light'],['#48494b','Dark']].map(([hex,lbl])=>(
-              <div key={hex} style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
-                <div style={{ width: 16, height: 16, background: hex, border: '1px solid var(--line)', flexShrink: 0 }} />
-                <span style={{ fontSize: '.58rem', fontWeight: 700, color: 'var(--ink)' }}>{hex} — {lbl}</span>
-              </div>
-            ))}
-            <span style={{ fontSize: '.5rem', color: 'var(--ink-muted)', marginLeft: 'auto' }}>2 colors · 40×80px · CC0</span>
-          </div>
-        </section>
-
-        {/* ── FEATURES ── */}
-        <section style={{ borderBottom: '1px solid var(--line)', padding: 'clamp(2rem,5vw,4rem) 0' }}>
+        {/* ── API PREVIEW ── */}
+        <section style={{ borderBottom: '1px solid var(--line)', padding: 'clamp(1.8rem,4vw,3.5rem) 0' }}>
           <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 1.25rem' }}>
-            <div style={{ fontSize: '.52rem', letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: '1.8rem' }}>How it works</div>
-            <style>{`@media(min-width:640px){.fn-features-grid{grid-template-columns:repeat(2,1fr)!important}}@media(min-width:960px){.fn-features-grid{grid-template-columns:repeat(3,1fr)!important}}`}</style>
-            <div className="fn-features-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 0 }}>
-              {features.map((f, i) => (
-                <div key={i} style={{ padding: '1.2rem 0', borderTop: '1px solid var(--line-soft)' }}>
-                  <div style={{ display: 'flex', gap: '.75rem', paddingRight: '1rem' }}>
-                    <div style={{ fontSize: '.9rem', fontWeight: 900, opacity: .12, lineHeight: 1, minWidth: '1.4rem', flexShrink: 0, color: 'var(--ink)' }}>{f.n}</div>
-                    <div>
-                      <div style={{ fontSize: '.68rem', fontWeight: 700, marginBottom: '.2rem', color: 'var(--ink)' }}>{f.title}</div>
-                      <div style={{ fontSize: '.62rem', color: 'var(--ink-mid)', lineHeight: 1.7 }}>{f.body}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div style={{ fontSize: '.48rem', letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--ink-muted)', marginBottom: '1.2rem' }}>Use it in any game or app</div>
+            <div style={{ background: 'var(--bg-sink)', border: '1px solid var(--line)', padding: '1rem 1.25rem', overflowX: 'auto' }}>
+              <pre style={{ fontSize: '.68rem', color: 'var(--ink-mid)', lineHeight: 1.75, margin: 0 }}>{[
+                `GET /api/v1/normies/{id}/full.png?pose=stand`,
+                `GET /api/v1/normies/{id}/full.png?pose=walk&frame=0`,
+                `GET /api/v1/normies/{id}/full.png?pose=sit`,
+                `GET /api/v1/normies/{id}/full.png?pose=sleep`,
+                `GET /api/v1/normies/{id}/full-meta.json`,
+                `GET /api/v1/normies/{id}/sheet.png`,
+              ].join('\n')}</pre>
+            </div>
+            <div style={{ marginTop: '.8rem', display: 'flex', justifyContent: 'flex-end' }}>
+              <Link href="/how-it-works" style={{ fontSize: '.55rem', letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--ink-muted)', textDecoration: 'none' }}>
+                Full API docs →
+              </Link>
             </div>
           </div>
         </section>
 
-        {/* ── BOTTOM CTA ── */}
-        <section style={{ padding: 'clamp(2.5rem,6vw,5rem) 0' }}>
+        {/* ── STAT ROW ── */}
+        <section style={{ padding: 'clamp(2rem,5vw,4rem) 0' }}>
           <div style={{ maxWidth: 1080, margin: '0 auto', padding: '0 1.25rem' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', justifyContent: 'space-between', gap: '1.5rem' }}>
-              <div>
-                <div style={{ fontSize: 'clamp(1.2rem,4vw,2.2rem)', fontWeight: 900, letterSpacing: '-.04em', color: 'var(--ink)', marginBottom: '.5rem' }}>
-                  10,000 Normies.<br />3 million+ bodies.
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem 4rem' }}>
+              {[
+                ['10,000',    'Normies'],
+                ['3M+',       'Unique bodies'],
+                ['4',         'Poses  (stand / walk / sit / sleep)'],
+                ['40×80 px',  'Native resolution'],
+                ['0',         'External dependencies'],
+              ].map(([n, l]) => (
+                <div key={n}>
+                  <div style={{ fontSize: 'clamp(1.1rem,3vw,1.8rem)', fontWeight: 900, letterSpacing: '-.04em', color: 'var(--ink)' }}>{n}</div>
+                  <div style={{ fontSize: '.55rem', color: 'var(--ink-muted)', letterSpacing: '.08em', textTransform: 'uppercase', marginTop: '.15rem' }}>{l}</div>
                 </div>
-                <div style={{ fontSize: '.65rem', color: 'var(--ink-mid)' }}>12 shirts · 8 pants · 5 shoes · 5 builds · 3 torso heights · 3 shoulder widths · 3 leg widths · 4 belts — all from on-chain traits.</div>
-              </div>
-              <Link href="/engine?id=6793" style={{
-                display: 'inline-block', flexShrink: 0, background: 'var(--ink)', color: 'var(--bg)',
-                border: '1px solid var(--ink)', fontFamily: 'inherit', fontWeight: 700,
-                fontSize: '.6rem', letterSpacing: '.13em', textTransform: 'uppercase',
-                padding: '.65rem 1.4rem', textDecoration: 'none',
-              }}>▶ Generate a Sprite</Link>
+              ))}
             </div>
           </div>
         </section>
@@ -227,4 +158,16 @@ export default function Home() {
       <Footer />
     </div>
   )
+}
+
+function btnStyle(variant: 'solid' | 'outline'): React.CSSProperties {
+  return {
+    display: 'inline-block', textDecoration: 'none',
+    fontFamily: 'inherit', fontWeight: 700,
+    fontSize: '.65rem', letterSpacing: '.12em', textTransform: 'uppercase',
+    padding: '.7rem 1.3rem',
+    background: variant === 'solid' ? 'var(--ink)' : 'transparent',
+    color:      variant === 'solid' ? 'var(--bg)'  : 'var(--ink)',
+    border: `1px solid ${variant === 'solid' ? 'var(--ink)' : 'var(--line)'}`,
+  }
 }
