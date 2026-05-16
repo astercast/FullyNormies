@@ -1,0 +1,273 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FullNormies Sprite API",
+    "version": "1.0.0",
+    "description": "Live server-side sprite generation for Normie NFTs (token IDs 0–9999).\n\n## Native resolution\n- **40 × 80 px** portrait canvas (same aspect ratio as Normie head art)\n- Anchor point: **{x: 20, y: 76}** (bottom-center of feet, in native pixels)\n- Place sprites on a floor by aligning `anchor.y` to the floor y-coordinate\n\n## Color palette\n- Dark: `#48494b` (charcoal)\n- Light: `#e3e5e4` (off-white)\n- Background: transparent (`PNG` with alpha)\n\n## Facing\nAll sprites face **right**. Flip horizontally in canvas/CSS for left-facing:\n- Canvas: `ctx.scale(-1, 1)` then draw at negative x offset\n- CSS: `transform: scaleX(-1)`\n\n## CORS\nAll `/api/v1/*` endpoints return `Access-Control-Allow-Origin: *`.\nSafe to call directly from any browser origin.\n\n## Caching\n- Sprites: `Cache-Control: public, max-age=3600, stale-while-revalidate=86400`\n- ETags included for cheap revalidation\n- Normie data upstream revalidates every hour from `api.normies.art`"
+  },
+  "servers": [
+    { "url": "/api", "description": "Same-origin" },
+    { "url": "https://fullnormies.vercel.app/api", "description": "Production" }
+  ],
+  "tags": [
+    { "name": "sprites",  "description": "Sprite image endpoints" },
+    { "name": "metadata", "description": "JSON metadata endpoints" },
+    { "name": "batch",    "description": "Batch operations" }
+  ],
+  "paths": {
+    "/v1/normies/{id}/full.png": {
+      "get": {
+        "tags": ["sprites"],
+        "summary": "Get full-body sprite PNG",
+        "description": "Generates a 40×80 px transparent-background RGBA PNG for the given Normie.\nBody, clothing, and proportions are deterministically seeded from the token ID and on-chain traits.\n\nAll sprites face right. Use `facing=left` hint in your client (`canvas.scale(-1,1)`) if needed — the API always returns right-facing art.",
+        "parameters": [
+          { "$ref": "#/components/parameters/id" },
+          {
+            "name": "pose",
+            "in": "query",
+            "description": "Pose to render",
+            "schema": { "type": "string", "enum": ["stand", "walk", "sit", "sleep"], "default": "stand" }
+          },
+          {
+            "name": "frame",
+            "in": "query",
+            "description": "Walk animation frame index (0–3). Ignored for non-walk poses.",
+            "schema": { "type": "integer", "minimum": 0, "maximum": 3, "default": 0 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PNG sprite image",
+            "headers": {
+              "Cache-Control": { "schema": { "type": "string" } },
+              "ETag":          { "schema": { "type": "string" } }
+            },
+            "content": { "image/png": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/v1/normies/{id}/full-meta.json": {
+      "get": {
+        "tags": ["metadata"],
+        "summary": "Get full-body sprite metadata",
+        "description": "Returns sizing, anchor, and availability information. Query this first to size your canvas and choose pose URLs. Returns 404 with `exists: false` if the normie pixel data is unavailable.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": {
+          "200": {
+            "description": "Sprite metadata",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FullMeta" },
+                "example": {
+                  "id": 627,
+                  "exists": true,
+                  "pixelWidth": 40,
+                  "pixelHeight": 80,
+                  "anchor": { "x": 20, "y": 76 },
+                  "posesAvailable": ["stand", "walk", "sit", "sleep"],
+                  "walkFrames": 4,
+                  "facing": "right",
+                  "source": "fullnormies-engine-v1",
+                  "updatedAt": "2026-05-15T12:00:00Z"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Normie not found or pixel data unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id":     { "type": "integer" },
+                    "exists": { "type": "boolean", "enum": [false] },
+                    "status": { "type": "string", "enum": ["not_found"] }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": ["metadata"],
+        "summary": "Check if full-body sprite exists",
+        "description": "Returns 200 if the normie has pixel data, 404 otherwise. No body.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": {
+          "200": { "description": "Exists" },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/v1/normies/{id}/sheet.png": {
+      "get": {
+        "tags": ["sprites"],
+        "summary": "Get spritesheet PNG atlas",
+        "description": "Returns a 280×80 px PNG containing 7 frames in a single row:\n- Frames 0–3: walk cycle\n- Frame 4: stand\n- Frame 5: sit\n- Frame 6: sleep\n\nPair with `/v1/normies/{id}/sheet.json` for frame offsets.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": {
+          "200": {
+            "description": "Spritesheet PNG (280×80 px, transparent background)",
+            "content": { "image/png": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/v1/normies/{id}/sheet.json": {
+      "get": {
+        "tags": ["metadata"],
+        "summary": "Get spritesheet layout descriptor",
+        "description": "Returns the frame layout for `sheet.png`. The `frames` map gives frame indices (0-based columns in the atlas). Multiply by `frameWidth` for the pixel x-offset.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": {
+          "200": {
+            "description": "Spritesheet layout",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SheetMeta" },
+                "example": {
+                  "frameWidth": 40,
+                  "frameHeight": 80,
+                  "totalFrames": 7,
+                  "frames": {
+                    "walk": [0, 1, 2, 3],
+                    "stand": [4],
+                    "sit": [5],
+                    "sleep": [6]
+                  },
+                  "anchor": { "x": 20, "y": 76 },
+                  "note": "All sprites face right. Flip horizontally in client for left-facing."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/normies/{id}/face.png": {
+      "get": {
+        "tags": ["sprites"],
+        "summary": "Get 40×40 face PNG (fallback)",
+        "description": "Proxies the canonical face image from api.normies.art. Useful as a fallback if full-body generation is temporarily unavailable, or as a 2D avatar/portrait.",
+        "parameters": [{ "$ref": "#/components/parameters/id" }],
+        "responses": {
+          "200": {
+            "description": "Face PNG (40×40 px)",
+            "content": { "image/png": { "schema": { "type": "string", "format": "binary" } } }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/v1/normies/full-meta": {
+      "post": {
+        "tags": ["batch"],
+        "summary": "Batch fetch sprite metadata",
+        "description": "Fetch full-meta for up to 50 normies in one request. Ideal for prefetching a dorm roster. Returns an array in the same order as the requested IDs.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["ids"],
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": { "type": "integer", "minimum": 0, "maximum": 9999 },
+                    "maxItems": 50,
+                    "description": "Array of normie token IDs"
+                  }
+                }
+              },
+              "example": { "ids": [1, 42, 627, 9999] }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Array of meta objects",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/FullMeta" }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "id": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Normie token ID (0–9999)",
+        "schema": { "type": "integer", "minimum": 0, "maximum": 9999 }
+      }
+    },
+    "schemas": {
+      "Anchor": {
+        "type": "object",
+        "description": "Bottom-center of feet in native pixels. Use to place the sprite flush with a floor.",
+        "properties": {
+          "x": { "type": "integer", "description": "Horizontal anchor (pixels from left)" },
+          "y": { "type": "integer", "description": "Vertical anchor (pixels from top)" }
+        }
+      },
+      "FullMeta": {
+        "type": "object",
+        "properties": {
+          "id":             { "type": "integer" },
+          "exists":         { "type": "boolean" },
+          "pixelWidth":     { "type": "integer", "description": "Native sprite width in pixels", "example": 40 },
+          "pixelHeight":    { "type": "integer", "description": "Native sprite height in pixels", "example": 80 },
+          "anchor":         { "$ref": "#/components/schemas/Anchor" },
+          "posesAvailable": { "type": "array", "items": { "type": "string" } },
+          "walkFrames":     { "type": "integer", "example": 4 },
+          "facing":         { "type": "string", "enum": ["right"], "description": "All sprites face right; flip in client for left-facing" },
+          "source":         { "type": "string" },
+          "updatedAt":      { "type": "string", "format": "date-time" }
+        }
+      },
+      "SheetMeta": {
+        "type": "object",
+        "properties": {
+          "frameWidth":  { "type": "integer" },
+          "frameHeight": { "type": "integer" },
+          "totalFrames": { "type": "integer" },
+          "frames": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": { "type": "integer" }
+            }
+          },
+          "anchor": { "$ref": "#/components/schemas/Anchor" },
+          "note":   { "type": "string" }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid request",
+        "content": { "application/json": { "schema": { "type": "object", "properties": { "error": { "type": "string" } } } } }
+      },
+      "NotFound": {
+        "description": "Normie not found",
+        "content": { "application/json": { "schema": { "type": "object", "properties": { "error": { "type": "string" } } } } }
+      }
+    }
+  }
+}

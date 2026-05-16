@@ -139,18 +139,16 @@ function createSprite(transparent = false) {
 }
 
 // =============================================================================
-//  drawNormie — main sprite compositor
+//  drawNormieCore — pure drawing logic, no DOM. Shared with server engine.
+//  `set(x, y, dark)`:  dark=true → PD pixel, dark=false → background/clear
 // =============================================================================
-export function drawNormie(
+export function drawNormieCore(
   pixels: string,
   traits: TraitsData,
-  poseOrCfg: Pose | PoseCfg,
-  tokenId: number | null = null,
-  transparent = false
-): HTMLCanvasElement {
-  const { canvas, px, flush } = createSprite(transparent)
-  const set = px
-  const cfg = typeof poseOrCfg === 'string' ? POSE_CFG[poseOrCfg] : poseOrCfg
+  cfg: PoseCfg,
+  tokenId: number | null,
+  set: (x: number, y: number, dark: boolean) => void
+): void {
 
   // ══════════════════════════════════════════════════════════════════════════
   //  SEED EXTRACTION — 3 hashed layers for 3M+ unique body combinations
@@ -408,7 +406,21 @@ export function drawNormie(
 
   fillLeg(lLegX, cfg.lLegDx, cfg.legH)
   fillLeg(rLegX, cfg.rLegDx, cfg.legH)
+}
 
+// =============================================================================
+//  drawNormie — browser wrapper (creates DOM canvas, calls drawNormieCore)
+// =============================================================================
+export function drawNormie(
+  pixels: string,
+  traits: TraitsData,
+  poseOrCfg: Pose | PoseCfg,
+  tokenId: number | null = null,
+  transparent = false
+): HTMLCanvasElement {
+  const { canvas, px, flush } = createSprite(transparent)
+  const cfg = typeof poseOrCfg === 'string' ? POSE_CFG[poseOrCfg] : poseOrCfg
+  drawNormieCore(pixels, traits, cfg, tokenId, px)
   flush()
   return canvas
 }
