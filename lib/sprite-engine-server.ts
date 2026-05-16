@@ -106,77 +106,94 @@ function drawSleep(
   pixels: string,
   traits: TraitsData,
   tokenId: number | null,
-  transparent: boolean
+  _transparent: boolean
 ): void {
-  const seed    = traitHash(tokenId, traits)
-  const seed2   = Math.imul(seed, 0x9e3779b9) >>> 0
-  const s0      = seed & 0xff             // shirt color variant
-  const s1      = (seed >> 8)  & 0xff     // pants
-  const s3      = (seed >> 24) & 0xff     // shoe
-  const v0      = seed2 & 0xff            // torso height
+  const seed     = traitHash(tokenId, traits)
+  const seed2    = Math.imul(seed, 0x9e3779b9) >>> 0
+  const s0       = seed & 0xff
   const buildLvl = ((seed >> 16) & 0xff) % 5
-  const bodyH   = 7 + (buildLvl >= 3 ? 1 : 0)  // thicker body for broad builds
 
-  const baseY = 65  // vertical center of the lying figure
+  // Body thickness scales with build: 6-8 px
+  const bodyH  = 6 + (buildLvl >= 3 ? 2 : buildLvl >= 1 ? 1 : 0)
+  const bHalf  = Math.floor(bodyH / 2)
 
-  // ── Clear background for sleep area (make the lying space readable) ──────
-  // (background fill was done by createBuffer; we just draw on top)
+  // Vertical center of lying figure (lower third of 80px canvas)
+  const midY = 62
 
-  // ── ZZZ particles ─────────────────────────────────────────────────────────
-  // Three tiny 2×1 dots going up-right above the head
-  const zPositions = [ [3, baseY - 11], [5, baseY - 14], [7, baseY - 17] ]
-  for (const [zx, zy] of zPositions) {
-    set(zx, zy, true); set(zx + 1, zy, true)
+  // ── ZZZ particles — 3 small 2×1 dots rising diagonally above the head ──
+  const zzX0 = 3
+  set(zzX0,     midY - 12, true); set(zzX0 + 1, midY - 12, true)
+  set(zzX0 + 2, midY - 15, true); set(zzX0 + 3, midY - 15, true)
+  set(zzX0 + 4, midY - 18, true); set(zzX0 + 5, midY - 18, true)
+
+  // ── HEAD — rounded oval outline (9 wide × 11 tall) ─────────────────────
+  // Positioned at left of figure with 1px left margin
+  const HX = 1, HW = 9, HH = 11
+  const HY = midY - Math.floor(HH / 2)
+
+  // Top/bottom rows (inner only — cut corners for oval feel)
+  for (let x = HX + 1; x < HX + HW - 1; x++) {
+    set(x, HY,           true)   // top
+    set(x, HY + HH - 1,  true)   // bottom
+  }
+  // Side columns
+  for (let y = HY + 1; y < HY + HH - 1; y++) {
+    set(HX,           y, true)    // left
+    set(HX + HW - 1,  y, true)   // right
   }
 
-  // ── HEAD block ────────────────────────────────────────────────────────────
-  // Simplified: 9px wide × 11px tall rectangle with open center (face hole)
-  const hx = 0, hy = baseY - 6, hw = 9, hh = 11
-  for (let y = hy; y < hy + hh; y++)
-    for (let x = hx; x < hx + hw; x++) set(x, y, true)
-  // Face cutout
-  for (let y = hy + 2; y < hy + hh - 2; y++)
-    for (let x = hx + 2; x < hx + hw - 2; x++) set(x, y, false)
-  // Closed eyes (horizontal line)
-  const eyeY = hy + Math.floor(hh * 0.45)
-  for (let x = hx + 2; x < hx + hw - 2; x++) set(x, eyeY, true)
+  // Fill interior with light (PL) so eyes are legible on any background
+  for (let y = HY + 1; y < HY + HH - 1; y++)
+    for (let x = HX + 1; x < HX + HW - 1; x++) set(x, y, false)
 
-  // ── BODY block ────────────────────────────────────────────────────────────
-  const bx = hx + hw, bw = 19
-  for (let y = baseY - Math.floor(bodyH / 2); y < baseY - Math.floor(bodyH / 2) + bodyH; y++)
-    for (let x = bx; x < bx + bw; x++) set(x, y, true)
+  // Closed eyes — two parallel 2-px marks at 40 % from top
+  const eyeY = HY + Math.floor(HH * 0.40)
+  set(HX + 2, eyeY, true); set(HX + 3, eyeY, true)   // left eye
+  set(HX + 5, eyeY, true); set(HX + 6, eyeY, true)   // right eye
 
-  // Shirt detail (mirrors the shirt style from the normal engine)
-  const shirtType = [0, 1, 2, 3, 6, 7, 8, 9, 10, 11][ s0 % 10 ]
-  const midBody   = baseY - Math.floor(bodyH / 2) + Math.floor(bodyH / 2)
-  if (shirtType === 3 || shirtType === 4) {
-    // jacket/suit center line (vertical in standing = horizontal here)
-    const cx2 = bx + Math.floor(bw / 2)
-    for (let x = bx; x < bx + bw; x++) set(x, midBody, s0 % 3 === 0)
-    set(cx2, midBody, true)
-  } else if (shirtType === 1) {
-    // Stripe (horizontal in standing = vertical stripe here)
-    const sx2 = bx + Math.floor(bw * 0.6)
-    for (let y = baseY - Math.floor(bodyH / 2) + 1; y < baseY - Math.floor(bodyH / 2) + bodyH - 1; y++)
-      set(sx2, y, false)
+  // Tiny smile
+  set(HX + 3, HY + HH - 3, true)
+  set(HX + 5, HY + HH - 3, true)
+
+  // ── BODY — solid filled rectangle ───────────────────────────────────────
+  const BX = HX + HW          // starts right of head
+  // Max body width: leave room for legs (10) + shoe (2) + right margin (1) = 13
+  const BW = Math.min(SW - BX - 13, 13 + (buildLvl >= 2 ? 2 : 0) + (s0 % 3))  // 13-17 px
+  const BY = midY - bHalf
+  for (let y = BY; y < BY + bodyH; y++)
+    for (let x = BX; x < BX + BW; x++) set(x, y, true)
+
+  // Shirt detail — one horizontal divider line through body center
+  const shirtMidY = BY + bHalf
+  for (let x = BX + 1; x < BX + BW - 1; x++) set(x, shirtMidY, false)
+
+  // ── LEGS — slightly narrower than body ──────────────────────────────────
+  const LX  = BX + BW
+  const LW  = 10
+  const LH  = bodyH - 1
+  const LHalf = Math.floor(LH / 2)
+  for (let y = midY - LHalf; y < midY - LHalf + LH; y++)
+    for (let x = LX; x < LX + LW; x++) set(x, y, true)
+
+  // Pants seam
+  const seamX = LX + Math.floor(LW / 2)
+  for (let y = midY - LHalf + 1; y < midY - LHalf + LH - 1; y++) set(seamX, y, false)
+
+  // ── SHOE TIP — 3-px nub at far right, same height as body ───────────────
+  const SX = LX + LW
+  const SY = midY - bHalf
+  const SH = bodyH
+  if (SX + 2 < SW) {
+    for (let y = SY; y < SY + SH; y++) set(SX, y, true)
+    // Rounded toe
+    set(SX + 1, SY + 1,      true)
+    set(SX + 1, SY + SH - 2, true)
+  } else if (SX < SW) {
+    for (let y = SY; y < SY + SH; y++) set(SX, y, true)
   }
 
-  // ── LEGS block ────────────────────────────────────────────────────────────
-  const lx = bx + bw, lw = 10, lh = bodyH - 2
-  for (let y = baseY - Math.floor(lh / 2); y < baseY - Math.floor(lh / 2) + lh; y++)
-    for (let x = lx; x < lx + lw; x++) set(x, y, true)
-
-  // Pants detail
-  if (s1 % 8 === 1) {
-    const midLeg = lx + Math.floor(lw / 2)
-    for (let y = baseY - Math.floor(lh / 2); y < baseY - Math.floor(lh / 2) + lh; y++)
-      set(midLeg, y, false)
-  }
-
-  // ── SHOE (tip at far right) ────────────────────────────────────────────────
-  const sx = lx + lw, sh2 = s3 % 5 === 1 ? lh : lh - 2, sy2 = baseY - Math.floor(sh2 / 2)
-  for (let y = sy2; y < sy2 + sh2; y++) set(sx, y, true)
-  if (s3 % 5 !== 3) set(sx + 1, sy2 + 1, true)  // shoe bump
+  // Suppress unused variable warning
+  void seed2
 }
 
 // ---------------------------------------------------------------------------

@@ -189,25 +189,26 @@ export function drawNormieCore(
   // ── Build & proportions ───────────────────────────────────────────────────
   // 5 build levels: 0=slim, 1=regular, 2=medium, 3=broad, 4=stocky
   const buildLvl = s2 % 5
-  const baseTW   = isAlien ? 7 : isYoung ? 8 : 9
-  const tW       = baseTW + buildLvl          // 9–13 px on a 40px canvas
+  // Base torso: 10px for normal builds (was 9 — slightly broader default)
+  const baseTW   = isAlien ? 7 : isYoung ? 9 : 10
+  const tW       = baseTW + buildLvl          // 10–14 px on a 40px canvas
   const tX       = cx - Math.floor(tW / 2)
 
   // Torso height: 3 levels
   const torsoVar = v0 % 3
   const tH       = [8, 10, 11][torsoVar] - cfg.torsoSquash
 
-  // Shoulder: just 1px cap on broad/stocky, otherwise flush with torso
-  // Arms anchor directly off torso sides — no overwide shoulder floating them
-  const shOff    = buildLvl >= 3 ? 1 : 0
+  // Shoulder cap: all builds except the slimmest get a 1px outward cap.
+  // This gives clear shoulder-to-hip proportion without floating arms.
+  const shOff    = buildLvl >= 1 ? 1 : 0
 
-  // Legs: width scales with build, gap proportional to torso
-  const legW     = buildLvl >= 3 ? 3 : 2
+  // Legs: 3px wide for medium+ builds (was broad+ only)
+  const legW     = buildLvl >= 2 ? 3 : 2
   const legGap   = Math.max(3, Math.floor(tW / 3))
   const legSpan  = legW * 2 + legGap
 
-  // Arms: always 2px
-  const armW     = 2
+  // Arms: 2px wide for all; 3px for broad/stocky
+  const armW     = buildLvl >= 3 ? 3 : 2
 
   // Style selectors
   const shoeType    = s3 % 5              // 5 shoe styles
@@ -362,7 +363,8 @@ export function drawNormieCore(
 
   // ── HIP — 1px narrower each side than torso for a subtle waist taper ───────────
   const hipY  = tY + tH + 1
-  const hipW  = Math.max(legSpan, tW - 2)
+  // Hip width matches torso (no waist taper = masculine/neutral silhouette)
+  const hipW  = Math.max(legSpan, tW)
   const hipX  = cx - Math.floor(hipW / 2)
   for (let x = hipX; x < hipX + hipW; x++) set(x, hipY, true)
 
