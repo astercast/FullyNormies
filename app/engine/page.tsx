@@ -96,6 +96,45 @@ function PoseCard({ pose, canvas, active, onClick }: {
 }
 
 // ----------------------------------------------------------------------------
+//  API pose preview — shows all 4 API poses using v1 URL images (animated walk)
+// ----------------------------------------------------------------------------
+const API_POSE_LABELS: Record<string, string> = {
+  stand: 'Stand', walk: 'Walk (4-frame)', sit: 'Sit', sleep: 'Sleep',
+}
+
+function ApiPosePreview({ id }: { id: number }) {
+  const [walkFrame, setWalkFrame] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setWalkFrame(f => (f + 1) % 4), 160)
+    return () => clearInterval(t)
+  }, [])
+
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'.3rem' }}>
+      {(['stand','walk','sit','sleep'] as const).map(pose => {
+        const src = pose === 'walk'
+          ? `/api/v1/normies/${id}/full.png?pose=walk&frame=${walkFrame}`
+          : `/api/v1/normies/${id}/full.png?pose=${pose}`
+        return (
+          <div key={pose} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'.2rem' }}>
+            <div style={{ background:'#e3e5e4', border:'1px solid var(--line)', padding:2, width:'100%', aspectRatio:`${SW}/${SH}` }}>
+              <img
+                src={src}
+                alt={`${id} ${pose}`}
+                style={{ width:'100%', height:'100%', imageRendering:'pixelated', display:'block' }}
+              />
+            </div>
+            <span style={{ fontSize:'.42rem', color:'var(--ink-muted)', letterSpacing:'.06em', textTransform:'uppercase' }}>
+              {API_POSE_LABELS[pose]}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ----------------------------------------------------------------------------
 //  MAIN PAGE
 // ----------------------------------------------------------------------------
 function EngineInner() {
@@ -465,10 +504,19 @@ function EngineInner() {
                 </div>
               )}
 
+              {/* API live pose preview */}
+              {currentId != null && loadState === 'done' && (
+                <>
+                  <hr style={{ border:'none', borderTop:'1px solid var(--line-soft)', margin:'.9rem 0' }} />
+                  <span style={S.lbl}>API — Live Poses</span>
+                  <ApiPosePreview id={currentId} />
+                </>
+              )}
+
               {/* Sprite sheet preview — compact */}
               {sheet && (<>
                 <hr style={{ border:'none', borderTop:'1px solid var(--line-soft)', margin:'.9rem 0' }} />
-                <span style={S.lbl}>Sprite Sheet</span>
+                <span style={S.lbl}>Animation Sheet — 3 clips × 8 keyframes</span>
                 <div style={{ background:'#e3e5e4', border:'1px solid var(--line)', padding:2, display:'inline-block' }}>
                   <canvas
                     ref={el => {
@@ -484,7 +532,7 @@ function EngineInner() {
                   />
                 </div>
                 <div style={{ fontSize:'.42rem', color:'var(--ink-muted)', marginTop:'.3rem' }}>
-                  16 frames · 4×4 · {SW}×{SH}px
+                  24 frames · 8×3 · {SW}×{SH}px native · row 0=Idle, 1=Walk, 2=Crouch
                 </div>
               </>)}
             </div>

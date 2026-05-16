@@ -34,7 +34,7 @@ export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', crouc
 // Reference poses
 export const POSE_CFG: Record<Pose, PoseCfg> = {
   idle:   { torsoSquash:0, lArmDx:-2, lArmDy:1,  rArmDx:2, rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
-  walk:   { torsoSquash:0, lArmDx:-3, lArmDy:-2, rArmDx:3, rArmDy:2,  lLegDx:-3, rLegDx:+3, legH:NORMAL_LEG_H },
+  walk:   { torsoSquash:0, lArmDx:-4, lArmDy:-2, rArmDx:3, rArmDy:2,  lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
   crouch: { torsoSquash:2, lArmDx:-2, lArmDy:3,  rArmDx:2, rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:4 },
 }
 
@@ -67,22 +67,22 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
   //  visible — never flush against the torso.
   //  Legs: ±5 drift for a clear stride.
   { label: 'Walk', frames: [
-    // F1 - right heel strike
-    { torsoSquash:0, lArmDx:-3, lArmDy:-2, rArmDx:2, rArmDy:2,  lLegDx:-3, rLegDx:+3, legH:NORMAL_LEG_H   },
-    // F2 - right loading
-    { torsoSquash:0, lArmDx:-2, lArmDy:-1, rArmDx:2, rArmDy:1,  lLegDx:-2, rLegDx:+2, legH:NORMAL_LEG_H   },
-    // F3 - right passing: legs together, slight knee bend
-    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
-    // F4 - right toe-off: legs spreading toward left contact
-    { torsoSquash:0, lArmDx:-2, lArmDy: 1, rArmDx:2, rArmDy:-1, lLegDx:+2, rLegDx:-2, legH:NORMAL_LEG_H-1 },
-    // F5 - left heel strike (mirror of F1)
-    { torsoSquash:0, lArmDx:-2, lArmDy: 2, rArmDx:3, rArmDy:-2, lLegDx:+3, rLegDx:-3, legH:NORMAL_LEG_H   },
-    // F6 - left loading
-    { torsoSquash:0, lArmDx:-2, lArmDy: 1, rArmDx:2, rArmDy:-1, lLegDx:+2, rLegDx:-2, legH:NORMAL_LEG_H   },
-    // F7 - left passing: legs together, slight knee bend
-    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy:0,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
-    // F8 - left toe-off: legs spreading back toward right contact
-    { torsoSquash:0, lArmDx:-2, lArmDy:-1, rArmDx:2, rArmDy:1,  lLegDx:-2, rLegDx:+2, legH:NORMAL_LEG_H   },
+    // F0 - right heel strike: left arm forward+up, right arm back+down; legs max spread
+    { torsoSquash:0, lArmDx:-4, lArmDy:-2, rArmDx:+3, rArmDy:+2, lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H   },
+    // F1 - right loading: limbs converging toward center
+    { torsoSquash:0, lArmDx:-3, lArmDy:-1, rArmDx:+2, rArmDy:+1, lLegDx:-2, rLegDx:+2, legH:NORMAL_LEG_H   },
+    // F2 - right passing: legs together + slight knee bend; body at peak (bob up in API)
+    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:+1, rArmDy: 0, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
+    // F3 - right toe-off: legs spreading as left foot approaches
+    { torsoSquash:0, lArmDx:-2, lArmDy:+1, rArmDx:+3, rArmDy:-1, lLegDx:+2, rLegDx:-2, legH:NORMAL_LEG_H-1 },
+    // F4 - left heel strike (exact mirror of F0)
+    { torsoSquash:0, lArmDx:-3, lArmDy:+2, rArmDx:+4, rArmDy:-2, lLegDx:+4, rLegDx:-4, legH:NORMAL_LEG_H   },
+    // F5 - left loading (mirror of F1)
+    { torsoSquash:0, lArmDx:-2, lArmDy:+1, rArmDx:+3, rArmDy:-1, lLegDx:+2, rLegDx:-2, legH:NORMAL_LEG_H   },
+    // F6 - left passing (mirror of F2)
+    { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:+1, rArmDy: 0, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
+    // F7 - left toe-off (mirror of F3)
+    { torsoSquash:0, lArmDx:-3, lArmDy:-1, rArmDx:+2, rArmDy:+1, lLegDx:-2, rLegDx:+2, legH:NORMAL_LEG_H-1 },
   ]},
 
   //

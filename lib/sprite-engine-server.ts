@@ -33,14 +33,23 @@ const STAND_CFG: PoseCfg = {
   legH: NORMAL_LEG_H,
 }
 
-// 4 canonical walk frames taken from the 8-frame stride cycle
-// F0=heel strike R, F1=passing R, F2=heel strike L, F3=passing L
+// 4 canonical walk frames: heel-strike R → passing R → heel-strike L → passing L
+// Matches ANIM_CLIPS frames F0, F2, F4, F6 for consistency with downloadable sheets.
+// Passing frames (1, 3) also get a +1 px vertical bob applied at draw time (see below).
 const WALK_CFGS: PoseCfg[] = [
-  { torsoSquash:0, lArmDx:-3, lArmDy:-2, rArmDx:2, rArmDy:2,  lLegDx:-3, rLegDx:+3, legH:NORMAL_LEG_H   },
-  { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
-  { torsoSquash:0, lArmDx:-2, lArmDy: 2, rArmDx:3, rArmDy:-2, lLegDx:+3, rLegDx:-3, legH:NORMAL_LEG_H   },
-  { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
+  // F0 - right heel strike: max stride, left arm forward
+  { torsoSquash:0, lArmDx:-4, lArmDy:-2, rArmDx:+3, rArmDy:+2, lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H   },
+  // F2 - right passing: legs together, slight knee bend (body bobs up)
+  { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:+1, rArmDy: 0, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
+  // F4 - left heel strike: max stride, right arm forward (exact mirror of F0)
+  { torsoSquash:0, lArmDx:-3, lArmDy:+2, rArmDx:+4, rArmDy:-2, lLegDx:+4, rLegDx:-4, legH:NORMAL_LEG_H   },
+  // F6 - left passing: legs together (mirror of F2, body bobs up)
+  { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:+1, rArmDy: 0, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
 ]
+
+// Walk bob: passing frames (indices 1, 3) shift the entire sprite up 1 px
+// to simulate the natural height peak mid-stride.
+const WALK_BOB_PX = [0, 1, 0, 1]
 
 // Sit: arms resting at side, shorter legs spread slightly (front-view seated look)
 const SIT_CFG: PoseCfg = {
@@ -192,24 +201,32 @@ export function drawNormieServer(
   transparent = true
 ): PixelBuffer {
   const buf = createBuffer(SW, SH, transparent)
-  const { set } = buf
 
   if (pose === 'sleep') {
-    drawSleep(set, pixels, traits, tokenId, transparent)
+    drawSleep(buf.set, pixels, traits, tokenId, transparent)
     return buf
   }
 
   // Resolve pose config
   let cfg: PoseCfg
+  let bobPx = 0
   if (pose === 'walk') {
-    cfg = WALK_CFGS[Math.max(0, Math.min(WALK_FRAME_COUNT - 1, frame))]
+    const fi = Math.max(0, Math.min(WALK_FRAME_COUNT - 1, frame))
+    cfg   = WALK_CFGS[fi]
+    bobPx = WALK_BOB_PX[fi]
   } else if (pose === 'sit') {
     cfg = SIT_CFG
   } else {
     cfg = STAND_CFG
   }
 
-  drawNormieCore(pixels, traits, cfg, tokenId, set)
+  // Apply vertical bob offset: shift the entire sprite up by bobPx pixels.
+  // This creates the natural height-peak at the passing frame mid-stride.
+  const setFn = bobPx > 0
+    ? (x: number, y: number, dark: boolean) => buf.set(x, y - bobPx, dark)
+    : buf.set
+
+  drawNormieCore(pixels, traits, cfg, tokenId, setFn)
   return buf
 }
 
