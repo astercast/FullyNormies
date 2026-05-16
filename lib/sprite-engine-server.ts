@@ -21,8 +21,8 @@ export const WALK_FRAME_COUNT = 4
 export const NATIVE_WIDTH  = SW   // 40 px
 export const NATIVE_HEIGHT = SH   // 80 px
 // Anchor = bottom-center of feet in native pixels.
-// With NORMAL_LEG_H=14 and average tH=10: feet land at approx y=62.
-export const ANCHOR = { x: Math.floor(SW / 2), y: 64 }
+// With NORMAL_LEG_H=12 and average tH=10: feet land at approx y=56-58.
+export const ANCHOR = { x: Math.floor(SW / 2), y: 60 }
 
 // ---------------------------------------------------------------------------
 //  Pose configs
@@ -59,7 +59,7 @@ const SIT_CFG: PoseCfg = {
   lArmDx: -2, lArmDy: 2,
   rArmDx:  2, rArmDy: 2,
   lLegDx: -1, rLegDx: 1,
-  legH: 7,
+  legH: 6,
 }
 
 // ---------------------------------------------------------------------------
