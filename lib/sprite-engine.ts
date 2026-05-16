@@ -12,7 +12,7 @@ export const SW  = 40   // sprite width  (matches Normie head width)
 export const SH  = 80   // sprite height (28 head + body)
 export const HR  = 28   // head rows (captures face, chin, most beard content)
 export const SCL = 5    // display upscale  (40×80 → 200×400)
-export const NORMAL_LEG_H = 8
+export const NORMAL_LEG_H = 14
 
 // -- Types --------------------------------------------------------------------
 export interface TraitAttr { trait_type: string; value: string }
@@ -35,7 +35,7 @@ export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', crouc
 export const POSE_CFG: Record<Pose, PoseCfg> = {
   idle:   { torsoSquash:0, lArmDx:-2, lArmDy:1,  rArmDx:2, rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
   walk:   { torsoSquash:0, lArmDx:-4, lArmDy:-2, rArmDx:3, rArmDy:2,  lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
-  crouch: { torsoSquash:2, lArmDx:-2, lArmDy:3,  rArmDx:2, rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:4 },
+  crouch: { torsoSquash:2, lArmDx:-2, lArmDy:3,  rArmDx:2, rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:6 },
 }
 
 // =============================================================================
@@ -87,14 +87,15 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
 
   //
   // ── CROUCH  (enter → hold × 2 → rise) ─────────────────────────────────────
+  // legH values scaled proportionally to NORMAL_LEG_H=14: mid≈65%, full≈43%
   { label: 'Crouch', frames: [
     { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H   }, // stand
     { torsoSquash:0, lArmDx:-1, lArmDy: 1, rArmDx:1, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H-1 }, // begin descent
-    { torsoSquash:1, lArmDx:-2, lArmDy: 2, rArmDx:2, rArmDy: 2, lLegDx:0, rLegDx:0, legH:6 },              // mid descent
-    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:4 },              // full crouch
-    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:4 },              // hold
-    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:4 },              // hold
-    { torsoSquash:1, lArmDx:-2, lArmDy: 2, rArmDx:2, rArmDy: 2, lLegDx:0, rLegDx:0, legH:6 },              // mid rise
+    { torsoSquash:1, lArmDx:-2, lArmDy: 2, rArmDx:2, rArmDy: 2, lLegDx:0, rLegDx:0, legH:9 },              // mid descent (~65%)
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:6 },              // full crouch (~43%)
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:6 },              // hold
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:6 },              // hold
+    { torsoSquash:1, lArmDx:-2, lArmDy: 2, rArmDx:2, rArmDy: 2, lLegDx:0, rLegDx:0, legH:9 },              // mid rise
     { torsoSquash:0, lArmDx:-1, lArmDy: 1, rArmDx:1, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H-1 }, // nearly up
   ]},
 ]
@@ -189,7 +190,7 @@ export function drawNormieCore(
   // ── Build & proportions ───────────────────────────────────────────────────
   // 5 build levels: 0=slim, 1=regular, 2=medium, 3=broad, 4=stocky
   const buildLvl = s2 % 5
-  // Base torso: 10px for normal builds (was 9 — slightly broader default)
+  // Base torso: 10px for normal builds
   const baseTW   = isAlien ? 7 : isYoung ? 9 : 10
   const tW       = baseTW + buildLvl          // 10–14 px on a 40px canvas
   const tX       = cx - Math.floor(tW / 2)
@@ -199,16 +200,15 @@ export function drawNormieCore(
   const tH       = [8, 10, 11][torsoVar] - cfg.torsoSquash
 
   // Shoulder cap: all builds except the slimmest get a 1px outward cap.
-  // This gives clear shoulder-to-hip proportion without floating arms.
   const shOff    = buildLvl >= 1 ? 1 : 0
 
-  // Legs: 3px wide for medium+ builds (was broad+ only)
-  const legW     = buildLvl >= 2 ? 3 : 2
+  // Legs: Mario-style blocky — 4px for slim, 5px for all other builds
+  const legW     = buildLvl >= 1 ? 5 : 4
   const legGap   = Math.max(3, Math.floor(tW / 3))
   const legSpan  = legW * 2 + legGap
 
-  // Arms: 2px wide for all; 3px for broad/stocky
-  const armW     = buildLvl >= 3 ? 3 : 2
+  // Arms: blocky — 3px slim, 4px medium+
+  const armW     = buildLvl >= 2 ? 4 : 3
 
   // Style selectors
   const shoeType    = s3 % 5              // 5 shoe styles
@@ -333,24 +333,28 @@ export function drawNormieCore(
   }
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armH  = [5, 6, 6][torsoVar]      // arm length tracks torso
-  const handW = armW, handH = 1
-  // Anchor arms at torso edges — NOT outside shoulder — so they never float
+  const armH  = [6, 7, 7][torsoVar]   // arm length tracks torso (slightly longer than before)
   const lArmX = tX - armW
   const rArmX = tX + tW
-  const armY0 = HR + 1                   // arms start at shoulder row
+  const armY0 = HR + 1                // arms start at shoulder row
 
+  // Mario-style blocky arm:
+  //  • Upper half  — solid vertical block anchored to shoulder
+  //  • Lower half  — same block but shifted ~70% of the pose dx (elbow break)
+  //  • Fist        — armW+2 wide × 2 tall at full pose displacement
   function fillArm(rootX: number, dx: number, dy: number) {
+    const midS = Math.floor(armH / 2)
     for (let s = 0; s < armH; s++) {
-      const t  = s / (armH - 1)
-      const ax = rootX + Math.round(dx * t)
-      const ay = armY0 + s + Math.round(dy * t)
+      const shifted = s >= midS                        // lower half of arm
+      const ax = rootX + (shifted ? Math.round(dx * 0.7) : 0)
+      const ay = armY0 + s + Math.round(dy * s / Math.max(armH - 1, 1))
       for (let w = 0; w < armW; w++) set(ax + w, ay, true)
     }
-    const hx = rootX + Math.round(dx)
+    // Chunky fist: 2 rows tall, armW+2 wide, centred on full displacement
+    const hx = rootX + Math.round(dx) - 1
     const hy = armY0 + armH + Math.round(dy)
-    for (let r = 0; r < handH; r++)
-      for (let c = 0; c < handW; c++) set(hx + c, hy + r, true)
+    for (let r = 0; r < 2; r++)
+      for (let c = 0; c < armW + 2; c++) set(hx + c, hy + r, true)
   }
 
   fillArm(lArmX, cfg.lArmDx, cfg.lArmDy)
@@ -396,9 +400,9 @@ export function drawNormieCore(
     const ankX = Math.round(baseX + drift)
     const ankY = legY0 + lh
     for (let w = 0; w < legW; w++) set(ankX + w, ankY, true)
-    // Shoe — 5 styles scaled to leg width
-    const sw = [legW+1, legW+1, legW+1, legW, legW+2][shoeType]
-    const sh = [2, 3, 2, 1, 2][shoeType]
+    // Shoe — 5 styles scaled to leg width (wider for blocky Mario look)
+    const sw = [legW+2, legW+2, legW+2, legW+1, legW+3][shoeType]
+    const sh = [2, 3, 2, 2, 2][shoeType]
     const sx = shoeType === 3 ? ankX : ankX - 1                // flat shoes don't extend
     const sy = shoeType === 1 ? ankY : ankY + 1                // boots start at ankle row
     for (let r = 0; r < sh; r++)

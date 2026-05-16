@@ -164,13 +164,13 @@ export default function HowItWorksPage() {
         {/* ── CANVAS PLACEMENT ── */}
         <Section label="Placing sprites on a floor">
           <p style={{ ...S.body, marginBottom: '1rem' }}>
-            Every sprite has a fixed <strong>anchor point</strong> at <Ic>{'{ x: 20, y: 76 }'}</Ic> — the bottom-center of the feet in native pixels.
+            Every sprite has a fixed <strong>anchor point</strong> at <Ic>{'{ x: 20, y: 64 }'}</Ic> — the bottom-center of the feet in native pixels.
             Use it to align characters to any floor line regardless of pose or build variation.
           </p>
           <Code>{`
 // Fetch meta once per normie (or use known values)
 const meta = await fetch(\`/api/v1/normies/\${id}/full-meta.json\`).then(r => r.json())
-// → { pixelWidth: 40, pixelHeight: 80, anchor: { x: 20, y: 76 } }
+// → { pixelWidth: 40, pixelHeight: 80, anchor: { x: 20, y: 64 } }
 
 // Draw at floor position (floorX, floorY) using the anchor
 const img = new Image()
@@ -234,7 +234,7 @@ img.onload = () => {
     "sit":   [5],
     "sleep": [6]
   },
-  "anchor": { "x": 20, "y": 76 }
+  "anchor": { "x": 20, "y": 64 }
 }
 
 // Drawing frame N from the atlas:

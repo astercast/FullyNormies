@@ -20,7 +20,9 @@ export const API_POSES: ApiPose[] = ['stand', 'walk', 'sit', 'sleep']
 export const WALK_FRAME_COUNT = 4
 export const NATIVE_WIDTH  = SW   // 40 px
 export const NATIVE_HEIGHT = SH   // 80 px
-export const ANCHOR = { x: Math.floor(SW / 2), y: SH - 4 } // bottom-center of feet
+// Anchor = bottom-center of feet in native pixels.
+// With NORMAL_LEG_H=14 and average tH=10: feet land at approx y=62.
+export const ANCHOR = { x: Math.floor(SW / 2), y: 64 }
 
 // ---------------------------------------------------------------------------
 //  Pose configs
@@ -51,13 +53,13 @@ const WALK_CFGS: PoseCfg[] = [
 // to simulate the natural height peak mid-stride.
 const WALK_BOB_PX = [0, 1, 0, 1]
 
-// Sit: arms resting at side, shorter legs spread slightly (front-view seated look)
+// Sit: arms resting at side, bent legs (legH ~50% of normal for seated look)
 const SIT_CFG: PoseCfg = {
   torsoSquash: 0,
   lArmDx: -2, lArmDy: 2,
   rArmDx:  2, rArmDy: 2,
   lLegDx: -1, rLegDx: 1,
-  legH: 5,
+  legH: 7,
 }
 
 // ---------------------------------------------------------------------------
