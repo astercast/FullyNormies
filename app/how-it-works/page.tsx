@@ -1,7 +1,7 @@
 import Nav from '../components/Nav'
 import Footer from '../components/Footer'
 
-const BASE = 'https://fullynormies.vercel.app/api/v1'
+const BASE = 'https://fullnormies.vercel.app/api/v1'
 
 // ── Shared styles ────────────────────────────────────────────────────────────
 const S = {
