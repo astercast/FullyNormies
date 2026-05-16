@@ -8,6 +8,9 @@ const DEMO_IDS = [6793, 1337, 420, 888, 3141, 2048, 5555, 9001]
 const BASE = '/api/v1/normies'
 
 // Uses the v1 API directly — stable URLs, browser-cached, no canvas required
+// Display at 2× (80×160) for crisp integer-scale pixel art
+const DISP_W = 80, DISP_H = 160
+
 function HeroSprite({ id, active }: { id: number; active: boolean }) {
   const [frame, setFrame] = useState(0)
   const [loaded, setLoaded] = useState(false)
@@ -22,13 +25,12 @@ function HeroSprite({ id, active }: { id: number; active: boolean }) {
   const src  = `${BASE}/${id}/full.png?pose=${pose}&frame=${frame}`
 
   return (
-    <div style={{ position: 'relative', width: 56, height: 112 }}>
-      {/* Face fallback while full-body loads */}
+    <div style={{ position: 'relative', width: DISP_W, height: DISP_H }}>
       {!loaded && (
         <img
           src={`${BASE}/${id}/face.png`}
           alt=""
-          style={{ position: 'absolute', bottom: 0, left: 8, imageRendering: 'pixelated', width: 40, height: 40, opacity: 0.4 }}
+          style={{ position: 'absolute', bottom: 16, left: 0, imageRendering: 'pixelated', width: DISP_W, height: DISP_W, opacity: 0.35 }}
         />
       )}
       <img
@@ -36,7 +38,7 @@ function HeroSprite({ id, active }: { id: number; active: boolean }) {
         src={src}
         alt={`Normie #${id}`}
         onLoad={() => setLoaded(true)}
-        style={{ display: 'block', imageRendering: 'pixelated', width: 56, height: 112, opacity: loaded ? 1 : 0, transition: 'opacity .2s' }}
+        style={{ display: 'block', imageRendering: 'pixelated', width: DISP_W, height: DISP_H, opacity: loaded ? 1 : 0, transition: 'opacity .25s' }}
       />
     </div>
   )

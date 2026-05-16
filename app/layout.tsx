@@ -3,7 +3,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'FULLNORMIES — Sprite Engine',
-  description: 'Generate full-body pixel art sprites from Normies NFTs. Pure browser engine, no AI API.',
+  description: 'Full-body pixel art sprites for every Normie NFT. Live server API — one URL, four poses, zero setup.',
   openGraph: {
     title: 'FULLNORMIES',
     description: 'Turn any Normie NFT into a full-body pixel art game sprite.',
