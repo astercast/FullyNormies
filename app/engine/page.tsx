@@ -274,7 +274,7 @@ function EngineInner() {
   }
 
   function shareSprite() {
-    const url  = `https://fully-normies.vercel.app/engine?id=${currentId}`
+    const url  = `https://fullnormies.vercel.app/engine?id=${currentId}`
     const text = currentId != null
       ? `Just generated Normie #${currentId} as a full body pixel art sprite!`
       : `Just generated a Normie as a full body pixel art sprite!`
