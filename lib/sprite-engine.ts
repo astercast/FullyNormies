@@ -118,6 +118,41 @@ export function traitHash(id: number | null, traits: TraitsData): number {
   return Math.abs(h)
 }
 
+/** Extra torso width (both sides sum to 2× half) for row `y` — athletic / neutral silhouettes, not waist pinched. */
+function torsoRowExtra(trapStyle: number, y: number, tH: number): number {
+  if (trapStyle === 0) return 0
+  if (trapStyle === 1) return y < 2 ? 2 : 0
+  if (trapStyle === 2) return y < 3 ? 2 : 0
+  const d = Math.max(tH - 1, 1)
+  return Math.max(0, 2 - Math.floor((y * 3) / d))
+}
+
+/**
+ * Bottom pixel Y of shoes in **stand** pose (feet together), native 40×80 space.
+ * Used by the API anchor — matches `drawNormieCore` geometry for `POSE_CFG.idle` / stand.
+ */
+export function standFeetBottomY(tokenId: number | null, traits: TraitsData): number {
+  const seed  = traitHash(tokenId, traits)
+  const seed2 = Math.imul(seed, 0x9e3779b9) >>> 0
+  const s2    = (seed >> 16) & 0xff
+  const s3    = (seed >> 24) & 0xff
+  const v0    = seed2 & 0xff
+  const v3    = (seed2 >> 24) & 0xff
+
+  const torsoVar = v0 % 5
+  const tH       = [7, 8, 10, 10, 11][torsoVar]
+  const hipY     = HR + 2 + tH + 1
+
+  const legStretch = [0, 0, 0, 1, 1, 2][((v3 ^ s2) & 0xff) % 6]
+  const lh         = NORMAL_LEG_H + legStretch
+  const legY0      = hipY + 1
+  const ankY       = legY0 + lh
+  const shoeType   = s3 % 5
+  const sh         = [2, 3, 2, 2, 2][shoeType]
+  const sy         = shoeType === 1 ? ankY : ankY + 1
+  return sy + sh - 1
+}
+
 // -- Canvas sprite factory ----------------------------------------------------
 function createSprite(transparent = false) {
   const canvas = document.createElement('canvas')
@@ -152,9 +187,9 @@ export function drawNormieCore(
 ): void {
 
   // ══════════════════════════════════════════════════════════════════════════
-  //  SEED EXTRACTION — 3 hashed layers for 3M+ unique body combinations
-  //  12 shirts × 8 pants × 5 shoes × 5 builds × 3 torso heights
-  //  × 3 shoulders × 3 leg widths × 4 belts × 4 accessories
+  //  SEED EXTRACTION — 3 hashed layers → huge body × outfit space
+  //  10 shirts × 8 pants × 5 shoes × 5 builds × 5 torso heights × 4 silhouettes
+  //  × layered shoulder caps × 6 belts × 12 accessories × 6 leg lengths × arm tiers
   // ══════════════════════════════════════════════════════════════════════════
   const seed  = traitHash(tokenId, traits)
   const seed2 = Math.imul(seed, 0x9e3779b9) >>> 0
@@ -165,8 +200,8 @@ export function drawNormieCore(
   const s3    = (seed >> 24)     & 0xff   // shoe
   const v0    = seed2            & 0xff   // torso height
   const v1    = (seed2 >>  8)    & 0xff   // shoulder
-  const v2    = (seed2 >> 16)    & 0xff   // arm length (5 options — multiplies body variety)
-  const v3    = (seed2 >> 24)    & 0xff   // (reserved)
+  const v2    = (seed2 >> 16)    & 0xff   // arm length (7 tiers)
+  const v3    = (seed2 >> 24)    & 0xff   // torso silhouette + outfit mixing
   const v4    = seed3            & 0xff   // belt
   const v5    = (seed3 >>  8)    & 0xff   // accessory
 
@@ -193,36 +228,45 @@ export function drawNormieCore(
   // Base torso: 10px for normal builds
   const baseTW   = isAlien ? 7 : isYoung ? 9 : 10
   const tW       = baseTW + buildLvl          // 10–14 px on a 40px canvas
-  const tX       = cx - Math.floor(tW / 2)
 
-  // Torso height: 3 levels
-  const torsoVar = v0 % 3
-  const tH       = [8, 10, 11][torsoVar] - cfg.torsoSquash
+  // Torso height: 5 levels (short → tall)
+  const torsoVar = v0 % 5
+  const tH       = [7, 8, 10, 10, 11][torsoVar] - cfg.torsoSquash
 
-  // Shoulder cap: all builds except the slimmest get a 1px outward cap.
-  const shOff    = buildLvl >= 1 ? 1 : 0
+  // Shoulders: broader caps on bigger frames + seeded breadth (neutral / athletic read).
+  const shOff = Math.min(2, (buildLvl >= 1 ? 1 : 0) + (buildLvl >= 4 ? 1 : 0) + ((v1 & 3) >= 2 ? 1 : 0))
 
-  // Legs: 3px slim/regular, 4px medium+ — happy medium between spindly and blocky
-  const legW     = buildLvl >= 2 ? 4 : 3
+  // Torso silhouette: 0=boxy column, 1-2=upper flare (wider chest), 3=gentle V-taper (still straight hips).
+  const trapStyle = v3 % 4
+
+  let legW = buildLvl >= 2 ? 4 : 3
+  if (buildLvl >= 4 && v1 % 2 === 0) legW = 5
   const legGap   = Math.max(3, Math.floor(tW / 3))
   const legSpan  = legW * 2 + legGap
 
-  // Arms: 2px slim/regular/medium, 3px broad/stocky
-  const armW     = buildLvl >= 3 ? 3 : 2
+  // Arms: slimmer on slight builds; medium+ match wider torsos (less delicate read).
+  const armW     = buildLvl >= 2 ? 3 : 2
 
-  // Style selectors
+  // Longer/shorter legs — subtle stride DNA; scaled on crouch frames.
+  const legStretch = [0, 0, 0, 1, 1, 2][((v3 ^ s2) & 0xff) % 6]
+  const effLegH    = (base: number) =>
+    base + Math.round(legStretch * base / Math.max(NORMAL_LEG_H, 1))
+
+  // Style selectors — mix in v3 so one seed layer decorates another (explodes outfit combos).
+  const shirtPick  = (s0 + (v3 >> 2)) % 10
+  const pantsDetail = (s1 ^ (v3 >> 4)) & 7
   const shoeType    = s3 % 5              // 5 shoe styles
-  const pantsDetail = s1 % 8              // 8 pants styles
-  const beltType    = v4 % 4              // 4 belt styles
+  const beltType    = v4 % 6              // 6 belt / waist styles
 
-  // ── NECK (1px connector between head and shoulders) ───────────────────────
-  const neckW = 3
-  const neckX = cx - 1
+  // ── NECK ────────────────────────────────────────────────────────────────
+  const neckW = 3 + (buildLvl >= 3 || (v1 % 4 === 0) ? 1 : 0)
+  const neckX = cx - Math.floor(neckW / 2)
   for (let x = neckX; x < neckX + neckW; x++) set(x, HR, true)
 
-  // ── SHOULDER (top of torso + tiny cap for broad builds) ───────────────────
-  const shW  = tW + shOff * 2  // symmetric 1px cap each side on big builds only
-  const shX  = cx - Math.floor(shW / 2)
+  // ── SHOULDER (match upper chest flare) ───────────────────────────────────
+  const upperExtra = Math.max(torsoRowExtra(trapStyle, 0, tH), torsoRowExtra(trapStyle, 1, tH))
+  const shW        = tW + shOff * 2 + upperExtra
+  const shX        = cx - Math.floor(shW / 2)
   for (let x = shX; x < shX + shW; x++) set(x, HR + 1, true)
 
   // ── HEAD (rows 0–27) ─────────────────────────────────────────────────────
@@ -230,14 +274,23 @@ export function drawNormieCore(
     for (let c = 0; c < SW; c++)
       if (pixels[r * SW + c] === '1') set(c, r, true)
 
-  // ── TORSO (starts 2 rows below head: row HR+2) ───────────────────────────
+  // ── TORSO — rows vary width from seed (wider chest / V-taper), not waist-pinched
   const tY = HR + 2
-  for (let y = 0; y < tH; y++)
-    for (let x = tX; x < tX + tW; x++) set(x, tY + y, true)
+  for (let y = 0; y < tH; y++) {
+    const rw = tW + torsoRowExtra(trapStyle, y, tH)
+    const rx = cx - Math.floor(rw / 2)
+    for (let x = rx; x < rx + rw; x++) set(x, tY + y, true)
+  }
+
+  const rowAt = (torsoRowIdx: number) => {
+    const i = Math.max(0, Math.min(tH - 1, torsoRowIdx))
+    const rw = tW + torsoRowExtra(trapStyle, i, tH)
+    return { rx: cx - Math.floor(rw / 2), rw }
+  }
 
   // ── SHIRT (12 styles) ────────────────────────────────────────────────────
   const shirtMap  = [0,1,2,3,6,7,8,9,10,11]          // 10 normal options
-  const shirtType = isAgent ? 4 : isZombie ? 5 : shirtMap[s0 % 10]
+  const shirtType = isAgent ? 4 : isZombie ? 5 : shirtMap[shirtPick]
 
   if (shirtType === 0) {
     // Plain — collar notch
@@ -245,8 +298,10 @@ export function drawNormieCore(
   } else if (shirtType === 1) {
     // Striped — single horizontal stripe
     const sY = tY + Math.floor(tH * 0.6)
-    if (sY > tY && sY < tY + tH - 1)
-      for (let x = tX + 1; x < tX + tW - 1; x++) set(x, sY, false)
+    if (sY > tY && sY < tY + tH - 1) {
+      const { rx, rw } = rowAt(sY - tY)
+      for (let x = rx + 1; x < rx + rw - 1; x++) set(x, sY, false)
+    }
   } else if (shirtType === 2) {
     // Hoodie — collar rectangle
     set(cx - 1, tY, false); set(cx, tY, false)
@@ -263,7 +318,8 @@ export function drawNormieCore(
     // Zombie torn — scattered holes
     set(cx, tY, false)
     for (const hy of [3, 6]) if (hy < tH - 1) {
-      set(tX + 1, tY + hy, false); set(tX + tW - 2, tY + hy, false)
+      const { rx, rw } = rowAt(hy)
+      set(rx + 1, tY + hy, false); set(rx + rw - 2, tY + hy, false)
     }
   } else if (shirtType === 6) {
     // V-neck — V shaped collar
@@ -271,16 +327,19 @@ export function drawNormieCore(
     if (tH > 2) set(cx, tY + 1, false)
   } else if (shirtType === 7) {
     // Tank top — exposed shoulder corners (sleeveless look)
-    set(tX, tY, false); set(tX + 1, tY, false)
-    set(tX + tW - 1, tY, false); set(tX + tW - 2, tY, false)
-    if (tH > 1) { set(tX, tY + 1, false); set(tX + tW - 1, tY + 1, false) }
+    const tr = rowAt(0)
+    set(tr.rx, tY, false); set(tr.rx + 1, tY, false)
+    set(tr.rx + tr.rw - 1, tY, false); set(tr.rx + tr.rw - 2, tY, false)
+    if (tH > 1) { set(tr.rx, tY + 1, false); set(tr.rx + tr.rw - 1, tY + 1, false) }
   } else if (shirtType === 8) {
     // Turtleneck — fully solid, no collar cut
   } else if (shirtType === 9) {
     // Cross-hatch — checkerboard texture
-    for (let y = tY + 1; y < tY + tH - 1; y++)
-      for (let x = tX + 1 + ((y - tY) & 1); x < tX + tW - 1; x += 2)
+    for (let y = tY + 1; y < tY + tH - 1; y++) {
+      const { rx, rw } = rowAt(y - tY)
+      for (let x = rx + 1 + ((y - tY) & 1); x < rx + rw - 1; x += 2)
         set(x, y, false)
+    }
   } else if (shirtType === 10) {
     // Half-zip — center line upper half only
     const half = Math.floor(tH / 2)
@@ -290,17 +349,19 @@ export function drawNormieCore(
     const y1 = tY + Math.floor(tH * 0.35)
     const y2 = tY + Math.floor(tH * 0.65)
     for (const sy of [y1, y2])
-      if (sy > tY && sy < tY + tH - 1)
-        for (let x = tX + 1; x < tX + tW - 1; x++) set(x, sy, false)
+      if (sy > tY && sy < tY + tH - 1) {
+        const { rx, rw } = rowAt(sy - tY)
+        for (let x = rx + 1; x < rx + rw - 1; x++) set(x, sy, false)
+      }
   }
 
-  // ── ACCESSORY (tie / bowtie / chain) ──────────────────────────────────────
+  // ── ACCESSORY (tie / bowtie / chain / suspenders / lanyard) ───────────────
   const hasCenterLine = shirtType === 3 || shirtType === 4 || shirtType === 10
   if (isAgent) {
     // Agent always gets a tie — draws over suit seam
     for (let dy = 1; dy < Math.min(5, tH); dy++) set(cx, tY + dy, true)
   } else {
-    const accRoll = v5 % 10
+    const accRoll = v5 % 12
     if (accRoll === 7 && !hasCenterLine) {
       // Tie
       for (let dy = 1; dy < Math.min(5, tH); dy++) set(cx, tY + dy, true)
@@ -312,31 +373,48 @@ export function drawNormieCore(
       // Chain / necklace on shoulder row
       for (let x = cx - 2; x <= cx + 2; x++) set(x, HR, false)
       set(cx, HR, true)
+    } else if (accRoll === 10) {
+      // Suspenders — inner vertical straps
+      const maxD = Math.min(tH - 2, 5)
+      for (let dy = 2; dy <= maxD; dy++) {
+        const { rx, rw } = rowAt(dy)
+        set(rx + 1, tY + dy, true)
+        set(rx + rw - 2, tY + dy, true)
+      }
+    } else if (accRoll === 11) {
+      // ID lanyard — center strip + badge at chest
+      const d0 = Math.min(4, tH - 2)
+      for (let dy = 2; dy <= d0; dy++) set(cx, tY + dy, false)
+      if (tH > 4) { set(cx - 1, tY + 3, true); set(cx, tY + 3, true); set(cx + 1, tY + 3, true) }
     }
   }
 
-  // ── BELT (4 styles) — flush with torso, no waist-cinch extension ───────────
+  // ── BELT (6 styles) — flush with bottom torso row ───────────────────────
+  const { rx: bX, rw: bW } = rowAt(tH - 1)
   const beltY = tY + tH
   if (beltType === 0) {
-    // Standard — solid belt flush with torso, buckle gap in centre
-    for (let x = tX; x < tX + tW; x++) set(x, beltY, true)
+    for (let x = bX; x < bX + bW; x++) set(x, beltY, true)
     set(cx, beltY, false)
   } else if (beltType === 1) {
-    // Flat waistband — single solid row, no buckle
-    for (let x = tX; x < tX + tW; x++) set(x, beltY, true)
+    for (let x = bX; x < bX + bW; x++) set(x, beltY, true)
   } else if (beltType === 2) {
-    // Studded belt — flush with torso
-    for (let x = tX; x < tX + tW; x++) set(x, beltY, true)
-    for (let x = tX + 1; x < tX + tW - 1; x += 2) set(x, beltY, false)
+    for (let x = bX; x < bX + bW; x++) set(x, beltY, true)
+    for (let x = bX + 1; x < bX + bW - 1; x += 2) set(x, beltY, false)
+  } else if (beltType === 3) {
+    for (let x = bX; x < bX + bW; x++) set(x, beltY, true)
+    for (let x = bX + 2; x < bX + bW - 1; x += 4) set(x, beltY, false)
+  } else if (beltType === 4) {
+    for (let x = bX; x < bX + bW; x++) set(x, beltY, true)
+    if (bW > 5) { set(bX + 2, beltY, false); set(bX + bW - 3, beltY, false) }
   } else {
-    // No belt
+    // 5 — no belt
   }
 
   // ── ARMS ─────────────────────────────────────────────────────────────────
-  // 5 arm lengths driven by v2 (freed from leg-width duty) — 5× more body variety
-  const armH  = [5, 6, 6, 7, 7][v2 % 5]
-  const lArmX = tX - armW
-  const rArmX = tX + tW
+  const armH = [5, 5, 6, 6, 7, 7, 8][v2 % 7]
+  const topR = rowAt(0)
+  const lArmX = topR.rx - armW
+  const rArmX = topR.rx + topR.rw
   const armY0 = HR + 1                // arms start at shoulder row
 
   // 2-segment pixel-art arm: upper block straight, lower block angled (soft elbow).
@@ -368,10 +446,9 @@ export function drawNormieCore(
     for (let w = 0; w < armW; w++) { set(lArmX + w, armY0, false); set(rArmX + w, armY0, false) }
   }
 
-  // ── HIP — 1px narrower each side than torso for a subtle waist taper ───────────
+  // ── HIP — matches belt / leg span (no hourglass pinch) ───────────────────
   const hipY  = tY + tH + 1
-  // Hip width matches torso (no waist taper = masculine/neutral silhouette)
-  const hipW  = Math.max(legSpan, tW)
+  const hipW  = Math.max(legSpan, bW)
   const hipX  = cx - Math.floor(hipW / 2)
   for (let x = hipX; x < hipX + hipW; x++) set(x, hipY, true)
 
@@ -413,8 +490,8 @@ export function drawNormieCore(
     if (shoeType === 2) set(sx + sw - 1, sy, false)            // sneaker detail
   }
 
-  fillLeg(lLegX, cfg.lLegDx, cfg.legH)
-  fillLeg(rLegX, cfg.rLegDx, cfg.legH)
+  fillLeg(lLegX, cfg.lLegDx, effLegH(cfg.legH))
+  fillLeg(rLegX, cfg.rLegDx, effLegH(cfg.legH))
 }
 
 // =============================================================================

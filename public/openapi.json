@@ -3,7 +3,7 @@
   "info": {
     "title": "FullNormies Sprite API",
     "version": "1.0.0",
-    "description": "Live server-side sprite generation for Normie NFTs (token IDs 0–9999).\n\n## Native resolution\n- **40 × 80 px** portrait canvas (same aspect ratio as Normie head art)\n- Anchor point: **{x: 20, y: 64}** (bottom-center of feet, in native pixels)\n- Place sprites on a floor by aligning `anchor.y` to the floor y-coordinate\n\n## Color palette\n- Dark: `#48494b` (charcoal)\n- Light: `#e3e5e4` (off-white)\n- Background: transparent (`PNG` with alpha)\n\n## Facing\nAll sprites face **right**. Flip horizontally in canvas/CSS for left-facing:\n- Canvas: `ctx.scale(-1, 1)` then draw at negative x offset\n- CSS: `transform: scaleX(-1)`\n\n## CORS\nAll `/api/v1/*` endpoints return `Access-Control-Allow-Origin: *`.\nSafe to call directly from any browser origin.\n\n## Caching\n- Sprites: `Cache-Control: public, max-age=3600, stale-while-revalidate=86400`\n- ETags included for cheap revalidation\n- Normie data upstream revalidates every hour from `api.normies.art`"
+    "description": "Live server-side sprite generation for Normie NFTs (token IDs 0–9999).\n\n## Native resolution\n- **40 × 80 px** portrait canvas (same aspect ratio as Normie head art)\n- Anchor: **`{ x: 20, y: … }`** from `full-meta.json` / `sheet.json` — bottom-center of feet in **stand** pose (native pixels). **`y` is per normie** (torso height + leg-length seed), usually high-50s to low-60s.\n- Place sprites on a floor by aligning `anchor.y` to the floor y-coordinate\n\n## Color palette\n- Dark: `#48494b` (charcoal)\n- Light: `#e3e5e4` (off-white)\n- Background: transparent (`PNG` with alpha)\n\n## Facing\nAll sprites face **right**. Flip horizontally in canvas/CSS for left-facing:\n- Canvas: `ctx.scale(-1, 1)` then draw at negative x offset\n- CSS: `transform: scaleX(-1)`\n\n## CORS\nAll `/api/v1/*` endpoints return `Access-Control-Allow-Origin: *`.\nSafe to call directly from any browser origin.\n\n## Caching\n- Sprites: `Cache-Control: public, max-age=3600, stale-while-revalidate=86400`\n- ETags included for cheap revalidation\n- Normie data upstream revalidates every hour from `api.normies.art`"
   },
   "servers": [
     { "url": "/api", "description": "Same-origin" },
@@ -222,8 +222,8 @@
         "type": "object",
         "description": "Bottom-center of feet in native pixels. Use to place the sprite flush with a floor.",
         "properties": {
-          "x": { "type": "integer", "description": "Horizontal anchor (pixels from left)" },
-          "y": { "type": "integer", "description": "Vertical anchor (pixels from top)" }
+          "x": { "type": "integer", "description": "Horizontal anchor — always half of native width (20 for 40px sprites)", "example": 20 },
+          "y": { "type": "integer", "description": "Vertical anchor — bottom of shoes in stand pose; varies per normie (typically 56–63)", "example": 60 }
         }
       },
       "FullMeta": {

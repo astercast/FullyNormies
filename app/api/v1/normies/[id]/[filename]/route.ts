@@ -9,7 +9,7 @@
 //    face.png        (proxied from api.normies.art — 40×40 face fallback)
 // =============================================================================
 import { NextRequest, NextResponse } from 'next/server'
-import { drawNormieServer, buildSpriteSheet, API_POSES, ApiPose, NATIVE_WIDTH, NATIVE_HEIGHT, ANCHOR, WALK_FRAME_COUNT } from '@/lib/sprite-engine-server'
+import { drawNormieServer, buildSpriteSheet, API_POSES, ApiPose, NATIVE_WIDTH, NATIVE_HEIGHT, normieStandAnchor, WALK_FRAME_COUNT } from '@/lib/sprite-engine-server'
 import { encodePng } from '@/lib/png-encode'
 
 export const maxDuration = 30
@@ -113,7 +113,7 @@ export async function GET(
       exists:          true,
       pixelWidth:      NATIVE_WIDTH,
       pixelHeight:     NATIVE_HEIGHT,
-      anchor:          ANCHOR,
+      anchor:          normieStandAnchor(id, data.traits),
       posesAvailable:  API_POSES,
       walkFrames:      WALK_FRAME_COUNT,
       facing:          'right',
@@ -124,6 +124,10 @@ export async function GET(
 
   // ── sheet.json ────────────────────────────────────────────────────────────
   if (filename === 'sheet.json') {
+    const data = await fetchNormie(id)
+    if (!data) {
+      return errResponse('Normie not found or pixel data unavailable', 404)
+    }
     return jsonResponse({
       frameWidth:  NATIVE_WIDTH,
       frameHeight: NATIVE_HEIGHT,
@@ -134,8 +138,8 @@ export async function GET(
         sit:   [5],
         sleep: [6],
       },
-      anchor: ANCHOR,
-      note:   'All sprites face right. Flip horizontally in client for left-facing.',
+      anchor: normieStandAnchor(id, data.traits),
+      note:   'All sprites face right. Flip horizontally in client for left-facing. Anchor is stand-feet for this normie.',
     }, 86400)  // sheet layout never changes — long cache
   }
 

@@ -5,7 +5,10 @@
 //  Returns an array of full-meta objects — useful for prefetching a dorm roster.
 // =============================================================================
 import { NextRequest, NextResponse } from 'next/server'
-import { API_POSES, NATIVE_WIDTH, NATIVE_HEIGHT, ANCHOR, WALK_FRAME_COUNT } from '@/lib/sprite-engine-server'
+import { API_POSES, NATIVE_WIDTH, NATIVE_HEIGHT, normieStandAnchor, WALK_FRAME_COUNT } from '@/lib/sprite-engine-server'
+
+interface TraitAttr { trait_type: string; value: string }
+interface TraitsPayload { attributes: TraitAttr[] }
 
 export const maxDuration = 30
 export const dynamic     = 'force-dynamic'
@@ -22,7 +25,7 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS })
 }
 
-async function probeMeta(id: number): Promise<{ id: number; exists: boolean }> {
+async function probeMeta(id: number): Promise<{ id: number; exists: boolean; traits?: TraitsPayload }> {
   try {
     const [pr, tr] = await Promise.all([
       fetch(`https://api.normies.art/normie/${id}/pixels`, { next: { revalidate: 3600 } }),
@@ -31,7 +34,8 @@ async function probeMeta(id: number): Promise<{ id: number; exists: boolean }> {
     if (!pr.ok || !tr.ok) return { id, exists: false }
     const pixels = await pr.text()
     if (pixels.length !== 1600) return { id, exists: false }
-    return { id, exists: true }
+    const traits = (await tr.json()) as TraitsPayload
+    return { id, exists: true, traits }
   } catch {
     return { id, exists: false }
   }
@@ -72,19 +76,19 @@ export async function POST(req: NextRequest) {
   // Probe each normie in parallel
   const probes = await Promise.all(ids.map(probeMeta))
 
-  const results = probes.map(({ id, exists }) => ({
+  const results = probes.map(({ id, exists, traits }) => ({
     id,
     exists,
-    ...(exists ? {
+    ...(exists && traits ? {
       pixelWidth:     NATIVE_WIDTH,
       pixelHeight:    NATIVE_HEIGHT,
-      anchor:         ANCHOR,
+      anchor:         normieStandAnchor(id, traits),
       posesAvailable: API_POSES,
       walkFrames:     WALK_FRAME_COUNT,
       facing:         'right',
       source:         'fullnormies-engine-v1',
       updatedAt:      new Date().toISOString(),
-    } : { status: 'not_found' }),
+    } : { status: 'not_found' as const }),
   }))
 
   return NextResponse.json(results, {

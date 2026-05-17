@@ -9,7 +9,7 @@
 //    sit    — chair / desk pose (special leg geometry)
 //    sleep  — lying down (horizontal body at bottom of canvas)
 // =============================================================================
-import { drawNormieCore, traitHash, tv, PoseCfg, TraitsData, PL, PD, SW, SH, NORMAL_LEG_H } from './sprite-engine'
+import { drawNormieCore, traitHash, tv, PoseCfg, TraitsData, PL, PD, SW, SH, NORMAL_LEG_H, standFeetBottomY } from './sprite-engine'
 
 // ---------------------------------------------------------------------------
 //  Public types
@@ -20,9 +20,11 @@ export const API_POSES: ApiPose[] = ['stand', 'walk', 'sit', 'sleep']
 export const WALK_FRAME_COUNT = 4
 export const NATIVE_WIDTH  = SW   // 40 px
 export const NATIVE_HEIGHT = SH   // 80 px
-// Anchor = bottom-center of feet in native pixels.
-// With NORMAL_LEG_H=12 and average tH=10: feet land at approx y=56-58.
-export const ANCHOR = { x: Math.floor(SW / 2), y: 60 }
+
+/** Bottom-center of feet in stand pose; `y` varies with torso length + leg stretch seed. */
+export function normieStandAnchor(tokenId: number | null, traits: TraitsData): { x: number; y: number } {
+  return { x: Math.floor(SW / 2), y: standFeetBottomY(tokenId, traits) }
+}
 
 // ---------------------------------------------------------------------------
 //  Pose configs
@@ -301,6 +303,6 @@ export function buildSpriteSheet(
       sit:   [5],
       sleep: [6],
     },
-    anchor: ANCHOR,
+    anchor: normieStandAnchor(tokenId, traits),
   }
 }

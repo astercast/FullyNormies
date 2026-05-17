@@ -164,13 +164,15 @@ export default function HowItWorksPage() {
         {/* ── CANVAS PLACEMENT ── */}
         <Section label="Placing sprites on a floor">
           <p style={{ ...S.body, marginBottom: '1rem' }}>
-            Every sprite has a fixed <strong>anchor point</strong> at <Ic>{'{ x: 20, y: 60 }'}</Ic> — the bottom-center of the feet in native pixels.
-            Use it to align characters to any floor line regardless of pose or build variation.
+            Every sprite’s <strong>anchor</strong> comes from <Ic>full-meta.json</Ic> or <Ic>sheet.json</Ic>:{' '}
+            <Ic>{'{ x: 20, y: <per normie> }'}</Ic> — bottom-center of the feet in the <strong>stand</strong> pose (native pixels).
+            <Ic>x</Ic> is always half the 40px canvas width; <Ic>y</Ic> depends on torso height and leg-length seed (usually high‑50s to low‑60s).
+            Always use the meta value so characters line up on a floor regardless of build.
           </p>
           <Code>{`
 // Fetch meta once per normie (or use known values)
 const meta = await fetch(\`/api/v1/normies/\${id}/full-meta.json\`).then(r => r.json())
-// → { pixelWidth: 40, pixelHeight: 80, anchor: { x: 20, y: 60 } }
+// → { pixelWidth: 40, pixelHeight: 80, anchor: { x: 20, y: <number from API> } }
 
 // Draw at floor position (floorX, floorY) using the anchor
 const img = new Image()
@@ -223,18 +225,18 @@ img.onload = () => {
             The atlas is <strong>280×80 px</strong> — 7 frames × 40 px wide.
           </p>
           <Code>{`
-// Layout (from /sheet.json):
+// Layout (from /sheet.json). anchor.y is per normie — use the fetched value.
 {
   "frameWidth":  40,
   "frameHeight": 80,
   "totalFrames": 7,
   "frames": {
-    "walk":  [0, 1, 2, 3],   // x = frameIndex * 40
+    "walk":  [0, 1, 2, 3],
     "stand": [4],
     "sit":   [5],
     "sleep": [6]
   },
-  "anchor": { "x": 20, "y": 60 }
+  "anchor": { "x": 20, "y": 59 }
 }
 
 // Drawing frame N from the atlas:
