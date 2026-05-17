@@ -61,7 +61,7 @@ const SIT_CFG: PoseCfg = {
   lArmDx: -2, lArmDy: 2,
   rArmDx:  2, rArmDy: 2,
   lLegDx: -1, rLegDx: 1,
-  legH: 5,
+  legH: 6,
 }
 
 // ---------------------------------------------------------------------------
@@ -73,10 +73,7 @@ export interface PixelBuffer {
   height: number
 }
 
-function createBuffer(w: number, h: number, transparent: boolean): PixelBuffer & {
-  set: (x: number, y: number, dark: boolean) => void
-  setLightFill: (x: number, y: number) => void
-} {
+function createBuffer(w: number, h: number, transparent: boolean): PixelBuffer & { set: (x: number, y: number, dark: boolean) => void } {
   const data = new Uint8ClampedArray(w * h * 4)
   if (!transparent) {
     for (let i = 0; i < w * h; i++) {
@@ -99,13 +96,7 @@ function createBuffer(w: number, h: number, transparent: boolean): PixelBuffer &
     }
   }
 
-  const setLightFill = (x: number, y: number) => {
-    if (x < 0 || x >= w || y < 0 || y >= h) return
-    const i = (y * w + x) * 4
-    data[i] = PL[0]; data[i+1] = PL[1]; data[i+2] = PL[2]; data[i+3] = 255
-  }
-
-  return { data, width: w, height: h, set, setLightFill }
+  return { data, width: w, height: h, set }
 }
 
 
@@ -256,11 +247,7 @@ export function drawNormieServer(
     ? (x: number, y: number, dark: boolean) => buf.set(x, y - bobPx, dark)
     : buf.set
 
-  drawNormieCore(pixels, traits, cfg, tokenId, {
-    bg: (x, y) => buf.set(x, y, false),
-    edge: (x, y) => buf.set(x, y, true),
-    fill: (x, y) => buf.setLightFill(x, y),
-  })
+  drawNormieCore(pixels, traits, cfg, tokenId, setFn)
   return buf
 }
 
