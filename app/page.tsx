@@ -4,7 +4,7 @@ import Nav from './components/Nav'
 import Footer from './components/Footer'
 import { useEffect, useState } from 'react'
 
-const DEMO_IDS = [6793, 1337, 420, 888, 3141, 2048, 5555, 9001]
+const DEMO_IDS = [1, 4, 7, 13, 25, 42, 77, 99]
 const BASE = '/api/v1/normies'
 
 // Uses the v1 API directly — stable URLs, browser-cached, no canvas required

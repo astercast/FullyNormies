@@ -75,10 +75,16 @@ async function fetchNormie(id: number): Promise<NormieData | null> {
       fetch(`https://api.normies.art/normie/${id}/pixels`, { next: { revalidate: 3600 } }),
       fetch(`https://api.normies.art/normie/${id}/traits`,  { next: { revalidate: 3600 } }),
     ])
-    if (!pr.ok || !tr.ok) return null
-    const pixels = await pr.text()
-    if (pixels.length !== 1600) return null
+    // Traits 404 → normie doesn't exist
+    if (!tr.ok) return null
     const traits = await tr.json()
+    // Pixels may be temporarily unavailable (upstream 502/503).
+    // Fall back to blank pixels so the body still renders without a face.
+    let pixels = '0'.repeat(1600)
+    if (pr.ok) {
+      const text = await pr.text()
+      if (text.length === 1600) pixels = text
+    }
     return { pixels, traits }
   } catch {
     return null
