@@ -107,6 +107,18 @@ export async function GET(
     return errResponse('normie id must be an integer 0–9999', 400)
   }
 
+  // ── sprite-data.json — raw pixels + traits for client-side canvas rendering
+  if (filename === 'sprite-data.json') {
+    const data = await fetchNormie(id)
+    if (!data) {
+      return NextResponse.json(
+        { id, exists: false },
+        { status: 404, headers: CORS }
+      )
+    }
+    return jsonResponse({ id, exists: true, pixels: data.pixels, traits: data.traits }, 3600)
+  }
+
   // ── full-meta.json ────────────────────────────────────────────────────────
   if (filename === 'full-meta.json') {
     const data = await fetchNormie(id)

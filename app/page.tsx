@@ -5,7 +5,7 @@ import Footer from './components/Footer'
 import { useEffect, useState, useRef } from 'react'
 import { drawNormie, upscale, SW, SH, ANIM_CLIPS, POSE_CFG, TraitsData } from '@/lib/sprite-engine'
 
-const DEMO_IDS = [1, 4, 7, 13, 25, 42, 77, 99]
+const DEMO_IDS = [6793, 1337, 420, 888, 3141, 2048, 5555, 9001]
 
 const BLANK_PX = '0'.repeat(1600)
 const NO_TRAITS: TraitsData = { attributes: [] }
@@ -14,8 +14,21 @@ const SCALE = 2
 const DISP_W = SW * SCALE  // 80
 const DISP_H = SH * SCALE  // 160
 
+interface SpriteData { pixels: string; traits: TraitsData }
+
 function HeroSprite({ id, active }: { id: number; active: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [data, setData] = useState<SpriteData>({ pixels: BLANK_PX, traits: NO_TRAITS })
+
+  useEffect(() => {
+    setData({ pixels: BLANK_PX, traits: NO_TRAITS })
+    fetch(`/api/v1/normies/${id}/sprite-data.json`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { exists: boolean; pixels: string; traits: TraitsData } | null) => {
+        if (d?.exists && d.pixels && d.traits) setData({ pixels: d.pixels, traits: d.traits })
+      })
+      .catch(() => {})
+  }, [id])
 
   useEffect(() => {
     let fi = 0
@@ -23,7 +36,7 @@ function HeroSprite({ id, active }: { id: number; active: boolean }) {
       const canvas = canvasRef.current
       if (!canvas) return
       const cfg    = active ? WALK_FRAMES[fi % WALK_FRAMES.length] : POSE_CFG.idle
-      const sprite = drawNormie(BLANK_PX, NO_TRAITS, cfg, id, true)
+      const sprite = drawNormie(data.pixels, data.traits, cfg, id, true)
       const scaled = upscale(sprite, SCALE)
       const ctx    = canvas.getContext('2d')!
       ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -34,7 +47,7 @@ function HeroSprite({ id, active }: { id: number; active: boolean }) {
     if (!active) return
     const t = setInterval(() => { fi++; paint() }, 160)
     return () => clearInterval(t)
-  }, [id, active])
+  }, [id, active, data])
 
   return (
     <canvas
