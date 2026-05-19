@@ -75,9 +75,11 @@ async function fetchNormie(id: number): Promise<NormieData | null> {
       fetch(`https://api.normies.art/normie/${id}/pixels`, { next: { revalidate: 3600 } }),
       fetch(`https://api.normies.art/normie/${id}/traits`,  { next: { revalidate: 3600 } }),
     ])
-    // Traits 404 → normie doesn't exist
+    // Traits failure or non-existent normie → 404
     if (!tr.ok) return null
     const traits = await tr.json()
+    // normies.art returns HTTP 200 with {"error":"..."} for unminted IDs
+    if (!traits.attributes || !Array.isArray(traits.attributes) || traits.attributes.length === 0) return null
     // Pixels may be temporarily unavailable (upstream 502/503).
     // Fall back to blank pixels so the body still renders without a face.
     let pixels = '0'.repeat(1600)

@@ -2,45 +2,47 @@
 import Link from 'next/link'
 import Nav from './components/Nav'
 import Footer from './components/Footer'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { drawNormie, upscale, SW, SH, ANIM_CLIPS, POSE_CFG, TraitsData } from '@/lib/sprite-engine'
 
 const DEMO_IDS = [1, 4, 7, 13, 25, 42, 77, 99]
-const BASE = '/api/v1/normies'
 
-// Uses the v1 API directly — stable URLs, browser-cached, no canvas required
-// Display at 2× (80×160) for crisp integer-scale pixel art
-const DISP_W = 80, DISP_H = 160
+const BLANK_PX = '0'.repeat(1600)
+const NO_TRAITS: TraitsData = { attributes: [] }
+const WALK_FRAMES = ANIM_CLIPS[1].frames
+const SCALE = 2
+const DISP_W = SW * SCALE  // 80
+const DISP_H = SH * SCALE  // 160
 
 function HeroSprite({ id, active }: { id: number; active: boolean }) {
-  const [frame, setFrame] = useState(0)
-  const [loaded, setLoaded] = useState(false)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
-    if (!active) { setFrame(0); return }
-    const t = setInterval(() => setFrame(f => (f + 1) % 4), 160)
+    let fi = 0
+    const paint = () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const cfg    = active ? WALK_FRAMES[fi % WALK_FRAMES.length] : POSE_CFG.idle
+      const sprite = drawNormie(BLANK_PX, NO_TRAITS, cfg, id, true)
+      const scaled = upscale(sprite, SCALE)
+      const ctx    = canvas.getContext('2d')!
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.imageSmoothingEnabled = false
+      ctx.drawImage(scaled, 0, 0)
+    }
+    paint()
+    if (!active) return
+    const t = setInterval(() => { fi++; paint() }, 160)
     return () => clearInterval(t)
-  }, [active])
-
-  const pose = active ? 'walk' : 'stand'
-  const src  = `${BASE}/${id}/full.png?pose=${pose}&frame=${frame}`
+  }, [id, active])
 
   return (
-    <div style={{ position: 'relative', width: DISP_W, height: DISP_H }}>
-      {!loaded && (
-        <img
-          src={`${BASE}/${id}/face.png`}
-          alt=""
-          style={{ position: 'absolute', bottom: 16, left: 0, imageRendering: 'pixelated', width: DISP_W, height: DISP_W, opacity: 0.35 }}
-        />
-      )}
-      <img
-        key={pose}
-        src={src}
-        alt={`Normie #${id}`}
-        onLoad={() => setLoaded(true)}
-        style={{ display: 'block', imageRendering: 'pixelated', width: DISP_W, height: DISP_H, opacity: loaded ? 1 : 0, transition: 'opacity .25s' }}
-      />
-    </div>
+    <canvas
+      ref={canvasRef}
+      width={DISP_W}
+      height={DISP_H}
+      style={{ display: 'block', imageRendering: 'pixelated', width: DISP_W, height: DISP_H }}
+    />
   )
 }
 
@@ -66,7 +68,7 @@ function HeroStrip() {
         ))}
       </div>
       <div style={{ fontSize: '.42rem', letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--ink-muted)' }}>
-        #{DEMO_IDS[active]} · live from api
+        #{DEMO_IDS[active]} · canvas engine
       </div>
     </div>
   )

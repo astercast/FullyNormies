@@ -280,9 +280,19 @@ export function drawNormieCore(
   for (let x = shX; x < shX + shW; x++) set(x, HR + 1, true)
 
   // ── HEAD (rows 0–27) ─────────────────────────────────────────────────────
+  let anyFace = false
   for (let r = 0; r < HR; r++)
     for (let c = 0; c < SW; c++)
-      if (pixels[r * SW + c] === '1') set(c, r, true)
+      if (pixels[r * SW + c] === '1') { set(c, r, true); anyFace = true }
+
+  // Fallback head when no face pixels available (blank pixel string)
+  if (!anyFace) {
+    const hx = 4, hw = SW - 8, hy = 3, hh = HR - 5
+    for (let y = hy; y < hy + hh; y++) {
+      const corner = (y === hy || y === hy + hh - 1) ? 2 : (y === hy + 1 || y === hy + hh - 2) ? 1 : 0
+      for (let x = hx + corner; x < hx + hw - corner; x++) set(x, y, true)
+    }
+  }
 
   // ── TORSO — rows vary width from seed (wider chest / V-taper), not waist-pinched
   const tY = HR + 2
