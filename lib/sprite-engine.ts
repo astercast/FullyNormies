@@ -12,7 +12,7 @@ export const SW  = 40   // sprite width  (matches Normie head width)
 export const SH  = 80   // sprite height (28 head + body)
 export const HR  = 28   // head rows (captures face, chin, most beard content)
 export const SCL = 5    // display upscale  (40×80 → 200×400)
-export const NORMAL_LEG_H = 12
+export const NORMAL_LEG_H = 13
 
 // -- Types --------------------------------------------------------------------
 export interface TraitAttr { trait_type: string; value: string }
@@ -35,7 +35,7 @@ export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', crouc
 export const POSE_CFG: Record<Pose, PoseCfg> = {
   idle:   { torsoSquash:0, lArmDx:-2, lArmDy:1,  rArmDx:2, rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
   walk:   { torsoSquash:0, lArmDx:-4, lArmDy:-2, rArmDx:3, rArmDy:2,  lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
-  crouch: { torsoSquash:2, lArmDx:-2, lArmDy:3,  rArmDx:2, rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:5 },
+  crouch: { torsoSquash:2, lArmDx:-2, lArmDy:3,  rArmDx:2, rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:6 },
 }
 
 // =============================================================================
@@ -92,9 +92,9 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
     { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H   }, // stand
     { torsoSquash:0, lArmDx:-1, lArmDy: 1, rArmDx:1, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H-1 }, // begin descent
     { torsoSquash:1, lArmDx:-2, lArmDy: 2, rArmDx:2, rArmDy: 2, lLegDx:0, rLegDx:0, legH:8 },              // mid descent (~65%)
-    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:5 },              // full crouch (~43%)
-    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:5 },              // hold
-    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:5 },              // hold
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:6 },              // full crouch (~46%)
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:6 },              // hold
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:6 },              // hold
     { torsoSquash:1, lArmDx:-2, lArmDy: 2, rArmDx:2, rArmDy: 2, lLegDx:0, rLegDx:0, legH:8 },              // mid rise
     { torsoSquash:0, lArmDx:-1, lArmDy: 1, rArmDx:1, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H-1 }, // nearly up
   ]},
@@ -118,13 +118,20 @@ export function traitHash(id: number | null, traits: TraitsData): number {
   return Math.abs(h)
 }
 
-/** Extra torso width (both sides sum to 2× half) for row `y` — athletic / neutral silhouettes, not waist pinched. */
+/**
+ * Extra torso width (total, not per-side) for row `y`.
+ * Four styles: straight column, subtle chest shelf, athletic V-taper, broad chest.
+ * All tapers are gradual so the body reads as natural, not blocky.
+ */
 function torsoRowExtra(trapStyle: number, y: number, tH: number): number {
   if (trapStyle === 0) return 0
-  if (trapStyle === 1) return y < 2 ? 2 : 0
-  if (trapStyle === 2) return y < 3 ? 2 : 0
-  const d = Math.max(tH - 1, 1)
-  return Math.max(0, 2 - Math.floor((y * 3) / d))
+  const t = y / Math.max(tH - 1, 1)           // 0.0 = top row, 1.0 = bottom row
+  if (trapStyle === 1) return t < 0.4 ? 1 : 0  // subtle chest shelf — 1px wider at top 40%
+  if (trapStyle === 2) return Math.max(0, 2 - Math.round(t * 2.5))  // athletic V — 2→1→0
+  // style 3: broad chest with mid-torso taper
+  if (t < 0.25) return 2
+  if (t < 0.6)  return 1
+  return 0
 }
 
 /**
@@ -140,7 +147,7 @@ export function standFeetBottomY(tokenId: number | null, traits: TraitsData): nu
   const v3    = (seed2 >> 24) & 0xff
 
   const torsoVar = v0 % 5
-  const tH       = [7, 8, 10, 10, 11][torsoVar]
+  const tH       = [8, 9, 10, 11, 12][torsoVar]
   const hipY     = HR + 2 + tH + 1
 
   const legStretch = [0, 0, 0, 1, 1, 2][((v3 ^ s2) & 0xff) % 6]
@@ -223,24 +230,27 @@ export function drawNormieCore(
   const cx       = Math.floor(SW / 2)   // 20
 
   // ── Build & proportions ───────────────────────────────────────────────────
-  // 5 build levels: 0=slim, 1=regular, 2=medium, 3=broad, 4=stocky
+  // 5 build levels: 0=slim, 1=lean, 2=regular, 3=broad, 4=stocky
   const buildLvl = s2 % 5
-  // Base torso: 10px for normal builds
-  const baseTW   = isAlien ? 7 : isYoung ? 9 : 10
-  const tW       = baseTW + buildLvl          // 10–14 px on a 40px canvas
+  // Per-build torso widths — natural range, slim builds clearly thinner than stocky.
+  // Normal: 8-12 px on 40px canvas; young runs one tier narrower; alien stays narrow.
+  const tW = isAlien ? 7 : isYoung
+    ? [7, 8, 9, 10, 11][buildLvl]
+    : [8, 9, 10, 11, 12][buildLvl]
 
-  // Torso height: 5 levels (short → tall)
+  // Torso height: 5 levels (short → tall), all distinct
   const torsoVar = v0 % 5
-  const tH       = [7, 8, 10, 10, 11][torsoVar] - cfg.torsoSquash
+  const tH       = [8, 9, 10, 11, 12][torsoVar] - cfg.torsoSquash
 
-  // Shoulders: broader caps on bigger frames + seeded breadth (neutral / athletic read).
-  const shOff = Math.min(2, (buildLvl >= 1 ? 1 : 0) + (buildLvl >= 4 ? 1 : 0) + ((v1 & 3) >= 2 ? 1 : 0))
+  // Shoulders: 1px cap only for broad/stocky + rare seeded bump.
+  // Capped at 1 so shoulders never balloon out of proportion.
+  const shOff = buildLvl >= 3 ? 1 : ((v1 & 7) === 7 ? 1 : 0)
 
-  // Torso silhouette: 0=boxy column, 1-2=upper flare (wider chest), 3=gentle V-taper (still straight hips).
+  // Torso silhouette: 0=straight column, 1=subtle chest shelf, 2=athletic V-taper, 3=broad chest
   const trapStyle = v3 % 4
 
-  let legW = buildLvl >= 2 ? 4 : 3
-  if (buildLvl >= 4 && v1 % 2 === 0) legW = 5
+  // Legs: 3px for slim/lean, 4px for regular+. Cap at 4 — 5px reads too blocky.
+  const legW     = buildLvl >= 2 ? 4 : 3
   const legGap   = Math.max(3, Math.floor(tW / 3))
   const legSpan  = legW * 2 + legGap
 

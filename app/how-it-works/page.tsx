@@ -84,8 +84,10 @@ export default function HowItWorksPage() {
             </h1>
             <p style={{ ...S.body, maxWidth: 560 }}>
               FullNormies generates full-body pixel art sprites for any Normie NFT on demand,
-              server-side, with no dependencies. Point any game, dapp, or tool at a URL and
-              get a pixel-perfect PNG back — CORS open, CDN-cached, ETag-ready.
+              server-side, with no dependencies. Each body is procedurally built with natural
+              proportions — slim to stocky, with graduated silhouettes that avoid the blocky
+              look. Point any game, dapp, or tool at a URL and get a pixel-perfect PNG back —
+              CORS open, CDN-cached, ETag-ready.
             </p>
           </div>
         </section>
@@ -166,7 +168,7 @@ export default function HowItWorksPage() {
           <p style={{ ...S.body, marginBottom: '1rem' }}>
             Every sprite’s <strong>anchor</strong> comes from <Ic>full-meta.json</Ic> or <Ic>sheet.json</Ic>:{' '}
             <Ic>{'{ x: 20, y: <per normie> }'}</Ic> — bottom-center of the feet in the <strong>stand</strong> pose (native pixels).
-            <Ic>x</Ic> is always half the 40px canvas width; <Ic>y</Ic> depends on torso height and leg-length seed (usually high‑50s to low‑60s).
+            <Ic>x</Ic> is always half the 40px canvas width; <Ic>y</Ic> depends on torso height and leg-length seed (typically mid-50s to low-60s).
             Always use the meta value so characters line up on a floor regardless of build.
           </p>
           <Code>{`
@@ -274,11 +276,11 @@ const metas = await res.json()
                 },
                 {
                   n: '02', title: 'Deterministic body seed',
-                  body: 'A three-layer hash of the token ID and all trait values produces seed bytes that deterministically select: 5 body builds, 12 shirts, 8 pants, 5 shoes, 4 belt styles, and 3+ accessory types. Same ID = same body, every time.',
+                  body: 'A three-layer hash of the token ID and all trait values produces seed bytes that deterministically select: 5 body builds (slim → stocky), 4 silhouette shapes, 12 shirts, 8 pants styles, 5 shoes, 4 belt styles, and 3+ accessories. Same ID = same body, every time.',
                 },
                 {
                   n: '03', title: 'Pixel-by-pixel drawing',
-                  body: 'The engine draws every pixel by hand into a 40×80 Uint8ClampedArray — no SVG, no AI, no sprites library. Head pixels are composited from the on-chain face data; the body is assembled from geometric primitives.',
+                  body: 'The engine draws every pixel by hand into a 40×80 Uint8ClampedArray — no SVG, no AI, no sprites library. Head pixels are composited from on-chain face data; the body is built from graduated geometric primitives tuned for natural, non-blocky proportions across all five build tiers.',
                 },
                 {
                   n: '04', title: 'Zero-dep PNG encode',

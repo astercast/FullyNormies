@@ -97,7 +97,7 @@ export default function Home() {
 
                 <p style={{ fontSize: 'clamp(.8rem,2vw,.95rem)', color: 'var(--ink-mid)', lineHeight: 1.85, marginBottom: 'clamp(1rem,3vw,2rem)' }}>
                   Every Normie NFT as a live-generated, game-ready full-body sprite.<br />
-                  One URL. Four poses. Zero setup.
+                  Natural proportions. Five builds. One URL. Four poses. Zero setup.
                 </p>
 
                 <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
