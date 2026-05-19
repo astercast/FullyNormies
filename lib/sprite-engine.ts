@@ -12,7 +12,7 @@ export const SW  = 40   // sprite width  (matches Normie head width)
 export const SH  = 80   // sprite height (28 head + body)
 export const HR  = 28   // head rows (captures face, chin, most beard content)
 export const SCL = 5    // display upscale  (40×80 → 200×400)
-export const NORMAL_LEG_H = 13
+export const NORMAL_LEG_H = 11
 
 // -- Types --------------------------------------------------------------------
 export interface TraitAttr { trait_type: string; value: string }
@@ -287,7 +287,8 @@ export function drawNormieCore(
 
   // Fallback head when no face pixels available (blank pixel string)
   if (!anyFace) {
-    const hx = 4, hw = SW - 8, hy = 3, hh = HR - 5
+    const hw = 18, hh = 14
+    const hx = Math.floor((SW - hw) / 2), hy = 8
     for (let y = hy; y < hy + hh; y++) {
       const corner = (y === hy || y === hy + hh - 1) ? 2 : (y === hy + 1 || y === hy + hh - 2) ? 1 : 0
       for (let x = hx + corner; x < hx + hw - corner; x++) set(x, y, true)
