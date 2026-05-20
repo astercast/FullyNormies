@@ -287,12 +287,20 @@ export function drawNormieCore(
 
   // Fallback head when no face pixels available (blank pixel string)
   if (!anyFace) {
-    const hw = 18, hh = 14
+    const hw = 16, hh = 14
     const hx = Math.floor((SW - hw) / 2), hy = 8
     for (let y = hy; y < hy + hh; y++) {
       const corner = (y === hy || y === hy + hh - 1) ? 2 : (y === hy + 1 || y === hy + hh - 2) ? 1 : 0
       for (let x = hx + corner; x < hx + hw - corner; x++) set(x, y, true)
     }
+    // Carve eyes (2×2 clear holes)
+    const ey = hy + 4
+    set(hx + 2, ey, false); set(hx + 3, ey, false); set(hx + 2, ey+1, false); set(hx + 3, ey+1, false)
+    set(hx + 10, ey, false); set(hx + 11, ey, false); set(hx + 10, ey+1, false); set(hx + 11, ey+1, false)
+    // Carve mouth (4px wide smile shape)
+    const my = hy + 10
+    set(hx + 3, my, false); set(hx + 4, my, false); set(hx + 9, my, false); set(hx + 10, my, false)
+    set(hx + 5, my+1, false); set(hx + 6, my+1, false); set(hx + 7, my+1, false); set(hx + 8, my+1, false)
   }
 
   // ── TORSO — rows vary width from seed (wider chest / V-taper), not waist-pinched

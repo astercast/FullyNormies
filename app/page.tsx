@@ -5,7 +5,8 @@ import Footer from './components/Footer'
 import { useEffect, useState, useRef } from 'react'
 import { drawNormie, upscale, SW, SH, ANIM_CLIPS, POSE_CFG, TraitsData } from '@/lib/sprite-engine'
 
-const DEMO_IDS = [6793, 1337, 420, 888, 3141, 2048, 5555, 9001]
+// Use a spread of real normie IDs for body variety (face falls back to #1 if API down)
+const DEMO_IDS = [1, 42, 137, 256, 512, 777, 999, 1024]
 
 const BLANK_PX = '0'.repeat(1600)
 const NO_TRAITS: TraitsData = { attributes: [] }
@@ -16,12 +17,12 @@ const DISP_H = SH * SCALE  // 160
 
 interface SpriteData { pixels: string; traits: TraitsData }
 
-function HeroSprite({ id, active }: { id: number; active: boolean }) {
+function HeroSprite({ id, active, fallback }: { id: number; active: boolean; fallback: SpriteData }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [data, setData] = useState<SpriteData>({ pixels: BLANK_PX, traits: NO_TRAITS })
+  const [data, setData] = useState<SpriteData | null>(null)
 
   useEffect(() => {
-    setData({ pixels: BLANK_PX, traits: NO_TRAITS })
+    setData(null)
     fetch(`/api/v1/normies/${id}/sprite-data.json`)
       .then(r => r.ok ? r.json() : null)
       .then((d: { exists: boolean; pixels: string; traits: TraitsData } | null) => {
@@ -30,13 +31,16 @@ function HeroSprite({ id, active }: { id: number; active: boolean }) {
       .catch(() => {})
   }, [id])
 
+  // Use per-ID data when available, otherwise use fallback face with this ID's body seed
+  const face = data ?? fallback
+
   useEffect(() => {
     let fi = 0
     const paint = () => {
       const canvas = canvasRef.current
       if (!canvas) return
       const cfg    = active ? WALK_FRAMES[fi % WALK_FRAMES.length] : POSE_CFG.idle
-      const sprite = drawNormie(data.pixels, data.traits, cfg, id, true)
+      const sprite = drawNormie(face.pixels, face.traits, cfg, id, true)
       const scaled = upscale(sprite, SCALE)
       const ctx    = canvas.getContext('2d')!
       ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -47,7 +51,7 @@ function HeroSprite({ id, active }: { id: number; active: boolean }) {
     if (!active) return
     const t = setInterval(() => { fi++; paint() }, 160)
     return () => clearInterval(t)
-  }, [id, active, data])
+  }, [id, active, face])
 
   return (
     <canvas
@@ -61,6 +65,18 @@ function HeroSprite({ id, active }: { id: number; active: boolean }) {
 
 function HeroStrip() {
   const [active, setActive] = useState(0)
+  const [fallback, setFallback] = useState<SpriteData>({ pixels: BLANK_PX, traits: NO_TRAITS })
+
+  // Load normie #1 as the face fallback — first ID confirmed to have data
+  useEffect(() => {
+    fetch('/api/v1/normies/1/sprite-data.json')
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { exists: boolean; pixels: string; traits: TraitsData } | null) => {
+        if (d?.exists && d.pixels && d.traits) setFallback({ pixels: d.pixels, traits: d.traits })
+      })
+      .catch(() => {})
+  }, [])
+
   useEffect(() => {
     const t = setInterval(() => setActive(a => (a + 1) % DEMO_IDS.length), 2400)
     return () => clearInterval(t)
@@ -76,7 +92,7 @@ function HeroStrip() {
             transition:  'transform .35s cubic-bezier(.34,1.56,.64,1)',
             opacity: active === i ? 1 : 0.35,
           }}>
-            <HeroSprite id={id} active={active === i} />
+            <HeroSprite id={id} active={active === i} fallback={fallback} />
           </div>
         ))}
       </div>

@@ -21,13 +21,27 @@ export async function POST(req: NextRequest) {
       fetch(`https://api.normies.art/normie/${id}/traits`,  { next: { revalidate: 3600 } }),
     ])
 
-    if (!pixelsRes.ok) throw new Error(`Pixels fetch failed: ${pixelsRes.status}`)
-    if (!traitsRes.ok) throw new Error(`Traits fetch failed: ${traitsRes.status}`)
+    // Traits gate normie existence
+    if (!traitsRes.ok) {
+      return NextResponse.json({ error: `Normie #${id} not found` }, { status: 404 })
+    }
 
-    const pixels = await pixelsRes.text()
-    const traits = await traitsRes.json()
+    let traits: { attributes?: unknown[] } = {}
+    try { traits = await traitsRes.json() } catch { /* non-JSON from normies.art */ }
 
-    if (pixels.length !== 1600) throw new Error('Unexpected pixel data length')
+    // normies.art returns HTTP 200 with {"error":"..."} for unminted IDs
+    if (!traits.attributes || !Array.isArray(traits.attributes) || traits.attributes.length === 0) {
+      return NextResponse.json({ error: `Normie #${id} not found` }, { status: 404 })
+    }
+
+    // Pixels may be temporarily unavailable — fall back to blank (body still renders)
+    let pixels = '0'.repeat(1600)
+    if (pixelsRes.ok) {
+      try {
+        const text = await pixelsRes.text()
+        if (text.length === 1600) pixels = text
+      } catch { /* keep blank fallback */ }
+    }
 
     return NextResponse.json({ pixels, traits })
   } catch (e: unknown) {
