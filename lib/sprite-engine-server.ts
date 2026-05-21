@@ -41,13 +41,13 @@ const STAND_CFG: PoseCfg = {
 // Matches ANIM_CLIPS frames F0, F2, F4, F6 for consistency with downloadable sheets.
 // Passing frames (1, 3) also get a +1 px vertical bob applied at draw time (see below).
 const WALK_CFGS: PoseCfg[] = [
-  // F0 - right heel strike: max stride, left arm forward
-  { torsoSquash:0, lArmDx:-4, lArmDy:-2, rArmDx:+3, rArmDy:+2, lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H   },
-  // F2 - right passing: legs together, slight knee bend (body bobs up)
+  // F0 - right heel strike: symmetric ±3 arm swing
+  { torsoSquash:0, lArmDx:-3, lArmDy:-2, rArmDx:+3, rArmDy:+2, lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H   },
+  // F2 - right passing: legs together, slight knee bend
   { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:+1, rArmDy: 0, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
-  // F4 - left heel strike: max stride, right arm forward (exact mirror of F0)
-  { torsoSquash:0, lArmDx:-3, lArmDy:+2, rArmDx:+4, rArmDy:-2, lLegDx:+4, rLegDx:-4, legH:NORMAL_LEG_H   },
-  // F6 - left passing: legs together (mirror of F2, body bobs up)
+  // F4 - left heel strike: exact mirror of F0
+  { torsoSquash:0, lArmDx:+3, lArmDy:+2, rArmDx:-3, rArmDy:-2, lLegDx:+4, rLegDx:-4, legH:NORMAL_LEG_H   },
+  // F6 - left passing: mirror of F2
   { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:+1, rArmDy: 0, lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H-1 },
 ]
 

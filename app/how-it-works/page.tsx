@@ -84,10 +84,11 @@ export default function HowItWorksPage() {
             </h1>
             <p style={{ ...S.body, maxWidth: 560 }}>
               FullNormies generates full-body pixel art sprites for any Normie NFT on demand,
-              server-side, with no dependencies. Each body is procedurally built with natural
-              proportions — slim to stocky, with graduated silhouettes that avoid the blocky
-              look. Point any game, dapp, or tool at a URL and get a pixel-perfect PNG back —
-              CORS open, CDN-cached, ETag-ready.
+              server-side, with no dependencies. Each body is a clean solid silhouette —
+              no clothing patterns, just structural variation: five builds (slim to stocky),
+              graduated shoulder shapes, and seeded limb proportions that make every Normie
+              look distinct. Point any game, dapp, or tool at a URL and get a pixel-perfect
+              PNG back — CORS open, CDN-cached, ETag-ready.
             </p>
           </div>
         </section>
@@ -276,11 +277,11 @@ const metas = await res.json()
                 },
                 {
                   n: '02', title: 'Deterministic body seed',
-                  body: 'A three-layer hash of the token ID and all trait values produces seed bytes that deterministically select: 5 body builds (slim → stocky), 4 silhouette shapes, 12 shirts, 8 pants styles, 5 shoes, 4 belt styles, and 3+ accessories. Same ID = same body, every time.',
+                  body: 'A three-layer hash of the token ID and all trait values produces seed bytes that deterministically select structural proportions: 5 builds (slim → stocky), 5 torso heights, 4 silhouette shapes (straight / chest shelf / V-taper / broad chest), 7 arm-length tiers, and 3 leg-stretch levels. Same ID = same body, every time.',
                 },
                 {
                   n: '03', title: 'Pixel-by-pixel drawing',
-                  body: 'The engine draws every pixel by hand into a 40×80 Uint8ClampedArray — no SVG, no AI, no sprites library. Head pixels are composited from on-chain face data; the body is built from graduated geometric primitives tuned for natural, non-blocky proportions across all five build tiers.',
+                  body: 'The engine draws every pixel by hand into a 40×80 Uint8ClampedArray — no SVG, no AI, no sprites library. Head pixels are composited from on-chain face data; the body is a clean solid silhouette built from geometric primitives — no clothing patterns or decorations, just structural shape variation across all five build tiers.',
                 },
                 {
                   n: '04', title: 'Zero-dep PNG encode',
