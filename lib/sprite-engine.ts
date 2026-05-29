@@ -15,7 +15,7 @@ export const SCL = 5    // display upscale  (40×80 → 200×400)
 export const NORMAL_LEG_H = 9
 
 /** Bump when body rules or meta schema change — surfaced in full-meta.json. */
-export const ENGINE_VERSION = 'fullnormies-engine-v2'
+export const ENGINE_VERSION = 'fullnormies-engine-v2.1'
 
 const BUILD_LABELS = ['slim', 'lean', 'regular', 'medium', 'athletic', 'broad', 'stocky'] as const
 const SILHOUETTE_LABELS = [
@@ -36,6 +36,8 @@ export interface BodyProfileSummary {
   armLengthPx: number
   legWidthPx: number
   legLengthPx: number
+  /** Pixels applied when drawing head so face mass aligns with body center. */
+  headShiftPx: number
 }
 
 export function summarizeBodyProfile(
@@ -58,6 +60,7 @@ export function summarizeBodyProfile(
     armLengthPx:     geo.armH,
     legWidthPx:      geo.legW,
     legLengthPx:     geo.effLegH(NORMAL_LEG_H),
+    headShiftPx:     pixels ? computeHeadShift(pixels) : 0,
   }
 }
 
@@ -71,11 +74,15 @@ export interface HeadMetrics {
   maxX: number
   width: number
   centerX: number
+  /** Mass-weighted X of the face band (rows 6–23) — used to center head on body. */
+  faceCx: number
   chinY: number
 }
 
 export function analyzeHead(pixels: string): HeadMetrics | null {
   let minX = SW, maxX = -1, maxY = -1, count = 0
+  let faceSumX = 0, faceWeight = 0
+
   for (let r = 0; r < HR; r++) {
     for (let c = 0; c < SW; c++) {
       if (pixels[r * SW + c] !== '1') continue
@@ -83,16 +90,37 @@ export function analyzeHead(pixels: string): HeadMetrics | null {
       maxX = Math.max(maxX, c)
       maxY = Math.max(maxY, r)
       count++
+      // Face band: de-emphasise hat/hair top & chin fringe for centering
+      if (r >= 6 && r <= 23) {
+        faceSumX += c * 2
+        faceWeight += 2
+      } else {
+        faceSumX += c
+        faceWeight += 1
+      }
     }
   }
   if (count === 0) return null
+
+  const bboxCx = Math.floor((minX + maxX) / 2)
+  const faceCx = faceWeight > 0 ? Math.round(faceSumX / faceWeight) : bboxCx
+
   return {
     minX,
     maxX,
     width: maxX - minX + 1,
-    centerX: Math.floor((minX + maxX) / 2),
+    centerX: bboxCx,
+    faceCx,
     chinY: maxY,
   }
+}
+
+/** Horizontal shift so face mass sits on canvas center (anchor x=20). Clamped to avoid clipping. */
+export function computeHeadShift(pixels: string): number {
+  const head = analyzeHead(pixels)
+  if (!head) return 0
+  const target = Math.floor(SW / 2)
+  return clamp(target - head.faceCx, -head.minX, SW - 1 - head.maxX)
 }
 
 /** Resolved proportions for one Normie — shared by draw + stand anchor. */
@@ -239,7 +267,7 @@ export function computeBodyGeometry(
 
   const effLegH = (base: number) => base + legStretch
 
-  let neckW = 2 + (buildLvl >= 4 ? 1 : 0)
+  let neckW = clamp(Math.floor(headW * 0.18) + (buildLvl >= 4 ? 1 : 0), 2, 4)
   if (hasBeard) neckW = clamp(neckW + 1, 2, 4)
   if (isAlien) neckW = 2
 
@@ -415,25 +443,30 @@ export function drawNormieCore(
   tokenId: number | null,
   set: (x: number, y: number, dark: boolean) => void
 ): void {
-  const head = analyzeHead(pixels)
-  const geo  = computeBodyGeometry(tokenId, traits, head, cfg.torsoSquash)
+  const head    = analyzeHead(pixels)
+  const headShift = computeHeadShift(pixels)
+  const geo     = computeBodyGeometry(tokenId, traits, head, cfg.torsoSquash)
   const { cx, tH, tY, neckW, armW, armH, legW, legSpan, effLegH, rowAt } = geo
 
-  // ── NECK ─────────────────────────────────────────────────────────────────
+  // ── NECK (centered under recentered face) ───────────────────────────────
   const neckX = cx - Math.floor(neckW / 2)
   for (let x = neckX; x < neckX + neckW; x++) set(x, HR, true)
 
-  // ── SHOULDERS (deltoid cap from chest width + seed offset) ─────────────
+  // ── SHOULDERS — slight cap, proportional to chest ───────────────────────
   const topR = rowAt(0)
   const shW = topR.rw + geo.shOff * 2
   const shX = cx - Math.floor(shW / 2)
   for (let x = shX; x < shX + shW; x++) set(x, HR + 1, true)
 
-  // ── HEAD ─────────────────────────────────────────────────────────────────
+  // ── HEAD — shift ink so face mass aligns with body center (x=20) ─────────
   let anyFace = false
-  for (let r = 0; r < HR; r++)
-    for (let c = 0; c < SW; c++)
-      if (pixels[r * SW + c] === '1') { set(c, r, true); anyFace = true }
+  for (let r = 0; r < HR; r++) {
+    for (let c = 0; c < SW; c++) {
+      if (pixels[r * SW + c] !== '1') continue
+      const x = c + headShift
+      if (x >= 0 && x < SW) { set(x, r, true); anyFace = true }
+    }
+  }
 
   if (!anyFace) {
     const hw = 16, hh = 14
@@ -457,10 +490,10 @@ export function drawNormieCore(
     for (let x = rx; x < rx + rw; x++) set(x, tY + y, true)
   }
 
-  // ── ARMS — rigid columns; pose translates the whole limb ─────────────────
+  // ── ARMS — attach at torso top, rigid columns ───────────────────────────
   const lArmX = topR.rx - armW
   const rArmX = topR.rx + topR.rw
-  const armY0 = HR + 1
+  const armY0 = tY
 
   function fillArm(rootX: number, dx: number, dy: number) {
     for (let s = 0; s < armH; s++) {
