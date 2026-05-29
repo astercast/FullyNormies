@@ -15,7 +15,7 @@ export const SCL = 5    // display upscale  (40×80 → 200×400)
 export const NORMAL_LEG_H = 9
 
 /** Bump when body rules or meta schema change — surfaced in full-meta.json. */
-export const ENGINE_VERSION = 'fullnormies-engine-v2.2'
+export const ENGINE_VERSION = 'fullnormies-engine-v2.1'
 
 const BUILD_LABELS = ['slim', 'lean', 'regular', 'medium', 'athletic', 'broad', 'stocky'] as const
 const SILHOUETTE_LABELS = [
@@ -74,41 +74,14 @@ export interface HeadMetrics {
   maxX: number
   width: number
   centerX: number
-  /** Jaw / neck-band centroid — primary anchor for body alignment. */
-  alignmentCx: number
-  /** Mass center of eye-band rows (fallback signal). */
-  eyeCx: number
+  /** Mass-weighted X of the face band (rows 6–23) — used to center head on body. */
+  faceCx: number
   chinY: number
-  jawMinX: number
-  jawMaxX: number
-  jawWidth: number
-}
-
-function bandCentroid(
-  pixels: string,
-  y0: number,
-  y1: number,
-): { cx: number; count: number; minX: number; maxX: number } {
-  let sumX = 0, count = 0, minX = SW, maxX = -1
-  for (let r = y0; r <= y1; r++) {
-    for (let c = 0; c < SW; c++) {
-      if (pixels[r * SW + c] !== '1') continue
-      sumX += c
-      count++
-      minX = Math.min(minX, c)
-      maxX = Math.max(maxX, c)
-    }
-  }
-  return {
-    cx: count > 0 ? Math.round(sumX / count) : Math.floor(SW / 2),
-    count,
-    minX: count > 0 ? minX : 0,
-    maxX: count > 0 ? maxX : SW - 1,
-  }
 }
 
 export function analyzeHead(pixels: string): HeadMetrics | null {
   let minX = SW, maxX = -1, maxY = -1, count = 0
+  let faceSumX = 0, faceWeight = 0
 
   for (let r = 0; r < HR; r++) {
     for (let c = 0; c < SW; c++) {
@@ -117,46 +90,37 @@ export function analyzeHead(pixels: string): HeadMetrics | null {
       maxX = Math.max(maxX, c)
       maxY = Math.max(maxY, r)
       count++
+      // Face band: de-emphasise hat/hair top & chin fringe for centering
+      if (r >= 6 && r <= 23) {
+        faceSumX += c * 2
+        faceWeight += 2
+      } else {
+        faceSumX += c
+        faceWeight += 1
+      }
     }
   }
   if (count === 0) return null
 
   const bboxCx = Math.floor((minX + maxX) / 2)
-  const chinY  = maxY
-
-  const jawBand = bandCentroid(pixels, Math.max(0, chinY - 5), chinY)
-  const eyeBand = bandCentroid(pixels, 14, Math.min(19, chinY))
-
-  let alignmentCx = bboxCx
-  if (jawBand.count >= 6) {
-    alignmentCx = jawBand.cx
-  } else if (eyeBand.count >= 6) {
-    alignmentCx = eyeBand.cx
-  }
+  const faceCx = faceWeight > 0 ? Math.round(faceSumX / faceWeight) : bboxCx
 
   return {
     minX,
     maxX,
     width: maxX - minX + 1,
     centerX: bboxCx,
-    alignmentCx,
-    eyeCx: eyeBand.count > 0 ? eyeBand.cx : bboxCx,
-    chinY,
-    jawMinX: jawBand.count > 0 ? jawBand.minX : minX,
-    jawMaxX: jawBand.count > 0 ? jawBand.maxX : maxX,
-    jawWidth: jawBand.count > 0 ? jawBand.maxX - jawBand.minX + 1 : maxX - minX + 1,
+    faceCx,
+    chinY: maxY,
   }
 }
 
-/** Horizontal shift so jaw/neck sits on canvas center (anchor x=20). Hats may clip before the face does. */
+/** Horizontal shift so face mass sits on canvas center (anchor x=20). Clamped to avoid clipping. */
 export function computeHeadShift(pixels: string): number {
   const head = analyzeHead(pixels)
   if (!head) return 0
   const target = Math.floor(SW / 2)
-  const ideal  = target - head.alignmentCx
-  const lo = -head.jawMinX
-  const hi = SW - 1 - head.jawMaxX
-  return clamp(ideal, lo, hi)
+  return clamp(target - head.faceCx, -head.minX, SW - 1 - head.maxX)
 }
 
 /** Resolved proportions for one Normie — shared by draw + stand anchor. */
@@ -226,7 +190,6 @@ export function computeBodyGeometry(
   if (isYoung || isAlien) buildLvl = clamp(buildLvl - 1, 0, 6)
 
   const headW = head?.width ?? 18
-  const jawW  = head?.jawWidth ?? headW
   const headNudge = clamp(Math.floor((headW - 18) / 3), -1, 2)
 
   let baseW = clamp(6 + Math.floor(buildLvl * 0.75) + headNudge, 6, 11)
@@ -304,15 +267,15 @@ export function computeBodyGeometry(
 
   const effLegH = (base: number) => base + legStretch
 
-  let neckW = clamp(Math.floor(jawW * 0.32) + (buildLvl >= 4 ? 1 : 0), 2, 5)
-  if (hasBeard) neckW = clamp(neckW + 1, 2, 5)
+  let neckW = clamp(Math.floor(headW * 0.18) + (buildLvl >= 4 ? 1 : 0), 2, 4)
+  if (hasBeard) neckW = clamp(neckW + 1, 2, 4)
   if (isAlien) neckW = 2
 
   return {
     cx,
     buildLvl,
     tH,
-    tY: HR + 1,
+    tY: HR + 2,
     neckW,
     shOff,
     trapStyle,
@@ -442,7 +405,7 @@ export function traitHash(id: number | null, traits: TraitsData): number {
  */
 export function standFeetBottomY(tokenId: number | null, traits: TraitsData): number {
   const geo = computeBodyGeometry(tokenId, traits, null, 0)
-  const hipY = geo.tY + geo.tH
+  const hipY = geo.tY + geo.tH + 1
   const lh = geo.effLegH(NORMAL_LEG_H)
   const ankY = hipY + 1 + lh
   const shoeRows = 2
@@ -480,80 +443,22 @@ export function drawNormieCore(
   tokenId: number | null,
   set: (x: number, y: number, dark: boolean) => void
 ): void {
-  const head      = analyzeHead(pixels)
+  const head    = analyzeHead(pixels)
   const headShift = computeHeadShift(pixels)
-  const geo       = computeBodyGeometry(tokenId, traits, head, cfg.torsoSquash)
+  const geo     = computeBodyGeometry(tokenId, traits, head, cfg.torsoSquash)
   const { cx, tH, tY, neckW, armW, armH, legW, legSpan, effLegH, rowAt } = geo
-  const topR      = rowAt(0)
 
-  // ── TORSO (chest → waist → hip zones) ───────────────────────────────────
-  for (let y = 0; y < tH; y++) {
-    const rw = geo.torsoWidthAt(y)
-    const rx = cx - Math.floor(rw / 2)
-    for (let x = rx; x < rx + rw; x++) set(x, tY + y, true)
-  }
-
-  // ── ARMS — attach at upper chest, rigid columns ───────────────────────────
-  const lArmX = topR.rx - armW
-  const rArmX = topR.rx + topR.rw
-  const armY0 = tY + 1
-
-  function fillArm(rootX: number, dx: number, dy: number) {
-    for (let s = 0; s < armH; s++) {
-      const t  = s / Math.max(armH - 1, 1)
-      const ax = rootX + Math.round(dx * t)
-      const ay = armY0 + s + Math.round(dy * t)
-      for (let w = 0; w < armW; w++) set(ax + w, ay, true)
-    }
-    const hx = rootX + Math.round(dx)
-    const hy = armY0 + armH + Math.round(dy)
-    for (let w = 0; w < armW; w++) set(hx + w, hy, true)
-    if (armW >= 2) set(hx, hy + 1, true)
-  }
-
-  fillArm(lArmX, cfg.lArmDx, cfg.lArmDy)
-  fillArm(rArmX, cfg.rArmDx, cfg.rArmDy)
-
-  // ── PELVIS + LEGS ───────────────────────────────────────────────────────
-  const hipY = tY + tH
-  const hipX = cx - Math.floor(legSpan / 2)
-  for (let x = hipX; x < hipX + legSpan; x++) set(x, hipY, true)
-  if (geo.hipW > geo.waistW) {
-    const flare = cx - Math.floor(geo.hipW / 2)
-    for (let x = flare; x < flare + geo.hipW; x++) set(x, hipY, true)
-  }
-
-  const lLegX = hipX
-  const rLegX = hipX + legW + geo.legGap
-  const legY0 = hipY + 1
-  const lh    = effLegH(cfg.legH)
-
-  function fillLeg(baseX: number, drift: number) {
-    for (let s = 0; s < lh; s++) {
-      const lx = Math.round(baseX + drift * s / Math.max(lh - 1, 1))
-      for (let w = 0; w < legW; w++) set(lx + w, legY0 + s, true)
-    }
-    const ankX = Math.round(baseX + drift)
-    const ankY = legY0 + lh
-    for (let w = 0; w < legW; w++) set(ankX + w, ankY, true)
-    const sw = legW + 2
-    for (let r = 0; r < 2; r++)
-      for (let c = 0; c < sw; c++) set(ankX - 1 + c, ankY + 1 + r, true)
-  }
-
-  fillLeg(lLegX, cfg.lLegDx)
-  fillLeg(rLegX, cfg.rLegDx)
-
-  // ── NECK + SHOULDERS (under chin, above torso) ──────────────────────────
+  // ── NECK (centered under recentered face) ───────────────────────────────
   const neckX = cx - Math.floor(neckW / 2)
-  for (let x = neckX; x < neckX + neckW; x++) set(x, HR - 1, true)
   for (let x = neckX; x < neckX + neckW; x++) set(x, HR, true)
 
-  const shW = Math.max(topR.rw + geo.shOff * 2, neckW + 2)
+  // ── SHOULDERS — slight cap, proportional to chest ───────────────────────
+  const topR = rowAt(0)
+  const shW = topR.rw + geo.shOff * 2
   const shX = cx - Math.floor(shW / 2)
-  for (let x = shX; x < shX + shW; x++) set(x, HR, true)
+  for (let x = shX; x < shX + shW; x++) set(x, HR + 1, true)
 
-  // ── HEAD — jaw-aligned shift; drawn last so it sits on top ──────────────
+  // ── HEAD — shift ink so face mass aligns with body center (x=20) ─────────
   let anyFace = false
   for (let r = 0; r < HR; r++) {
     for (let c = 0; c < SW; c++) {
@@ -577,6 +482,60 @@ export function drawNormieCore(
     set(hx+3,my,false); set(hx+4,my,false); set(hx+9,my,false); set(hx+10,my,false)
     set(hx+5,my+1,false); set(hx+6,my+1,false); set(hx+7,my+1,false); set(hx+8,my+1,false)
   }
+
+  // ── TORSO (chest → waist → hip zones) ───────────────────────────────────
+  for (let y = 0; y < tH; y++) {
+    const rw = geo.torsoWidthAt(y)
+    const rx = cx - Math.floor(rw / 2)
+    for (let x = rx; x < rx + rw; x++) set(x, tY + y, true)
+  }
+
+  // ── ARMS — attach at torso top, rigid columns ───────────────────────────
+  const lArmX = topR.rx - armW
+  const rArmX = topR.rx + topR.rw
+  const armY0 = tY
+
+  function fillArm(rootX: number, dx: number, dy: number) {
+    for (let s = 0; s < armH; s++) {
+      const t  = s / Math.max(armH - 1, 1)
+      const ax = rootX + Math.round(dx * t)
+      const ay = armY0 + s + Math.round(dy * t)
+      for (let w = 0; w < armW; w++) set(ax + w, ay, true)
+    }
+    const hx = rootX + Math.round(dx)
+    const hy = armY0 + armH + Math.round(dy)
+    for (let w = 0; w < armW; w++) set(hx + w, hy, true)
+  }
+
+  fillArm(lArmX, cfg.lArmDx, cfg.lArmDy)
+  fillArm(rArmX, cfg.rArmDx, cfg.rArmDy)
+
+  // ── HIP BRIDGE ─────────────────────────────────────────────────────────
+  const hipY = tY + tH + 1
+  const hipX = cx - Math.floor(legSpan / 2)
+  for (let x = hipX; x < hipX + legSpan; x++) set(x, hipY, true)
+
+  // ── LEGS — rigid columns + simple shoe block ───────────────────────────
+  const lLegX = hipX
+  const rLegX = hipX + legW + geo.legGap
+  const legY0 = hipY + 1
+  const lh = effLegH(cfg.legH)
+
+  function fillLeg(baseX: number, drift: number) {
+    for (let s = 0; s < lh; s++) {
+      const lx = Math.round(baseX + drift * s / Math.max(lh - 1, 1))
+      for (let w = 0; w < legW; w++) set(lx + w, legY0 + s, true)
+    }
+    const ankX = Math.round(baseX + drift)
+    const ankY = legY0 + lh
+    for (let w = 0; w < legW; w++) set(ankX + w, ankY, true)
+    const sw = legW + 2
+    for (let r = 0; r < 2; r++)
+      for (let c = 0; c < sw; c++) set(ankX - 1 + c, ankY + 1 + r, true)
+  }
+
+  fillLeg(lLegX, cfg.lLegDx)
+  fillLeg(rLegX, cfg.rLegDx)
 }
 
 // =============================================================================

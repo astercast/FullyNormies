@@ -232,7 +232,7 @@
         "properties": {
           "id":               { "type": "integer" },
           "exists":           { "type": "boolean", "enum": [true] },
-          "engineVersion":    { "type": "string", "example": "fullnormies-engine-v2.2" },
+          "engineVersion":    { "type": "string", "example": "fullnormies-engine-v2.1" },
           "pixelWidth":       { "type": "integer", "example": 40 },
           "pixelHeight":      { "type": "integer", "example": 80 },
           "anchor":           { "$ref": "#/components/schemas/Anchor" },
