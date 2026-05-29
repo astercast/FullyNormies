@@ -61,7 +61,7 @@ const SIT_CFG: PoseCfg = {
   lArmDx: -2, lArmDy: 2,
   rArmDx:  2, rArmDy: 2,
   lLegDx: -1, rLegDx: 1,
-  legH: Math.max(5, Math.round(NORMAL_LEG_H * 0.5)),
+  legH: Math.max(4, Math.round(NORMAL_LEG_H * 0.45)),
 }
 
 // ---------------------------------------------------------------------------

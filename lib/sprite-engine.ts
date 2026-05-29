@@ -12,7 +12,7 @@ export const SW  = 40   // sprite width  (matches Normie head width)
 export const SH  = 80   // sprite height (28 head + body)
 export const HR  = 28   // head rows (captures face, chin, most beard content)
 export const SCL = 5    // display upscale  (40×80 → 200×400)
-export const NORMAL_LEG_H = 12
+export const NORMAL_LEG_H = 9
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n))
@@ -171,18 +171,16 @@ export function computeBodyGeometry(
   if (isAgent) armW = 3
   if (isAlien) armW = 2
 
-  let armH = [5, 5, 6, 6, 7, 7, 8][v2 % 7]
-  if (isOld || isCat) armH = clamp(armH - 1, 4, 8)
-  if (isAgent) armH = clamp(armH + 1, 5, 9)
-  if (isYoung) armH = clamp(armH + 1, 5, 9)
+  let armH = [4, 5, 5, 6, 6, 6, 7][v2 % 7]
+  if (isOld || isCat) armH = clamp(armH - 1, 4, 7)
+  if (isAgent) armH = clamp(armH + 1, 4, 7)
 
-  let legStretch = [0, 0, 0, 1, 1, 2][((v3 ^ s2) & 0xff) % 6]
-  if (isYoung || isAgent) legStretch = clamp(legStretch + 1, 0, 2)
-  if (isOld || isCat) legStretch = clamp(legStretch - 1, 0, 2)
-  if (isAlien) legStretch = clamp(legStretch + 1, 0, 2)
+  // Leg length: flat +0/+1 px only — keeps stand height stable, less limb stretch
+  let legStretch = [0, 0, 0, 0, 0, 1][((v3 ^ s2) & 0xff) % 6]
+  if (isOld || isCat) legStretch = 0
+  if (isAlien) legStretch = Math.min(legStretch + 1, 1)
 
-  const effLegH = (base: number) =>
-    base + Math.round(legStretch * base / Math.max(NORMAL_LEG_H, 1))
+  const effLegH = (base: number) => base + legStretch
 
   let neckW = 3 + (buildLvl >= 3 ? 1 : 0)
   if (hasBeard) neckW = clamp(neckW + 1, 3, 5)
@@ -233,7 +231,7 @@ export const POSE_LABEL: Record<Pose,string> = { idle:'Idle', walk:'Walk', crouc
 export const POSE_CFG: Record<Pose, PoseCfg> = {
   idle:   { torsoSquash:0, lArmDx:-2, lArmDy:1,  rArmDx: 2, rArmDy:1,  lLegDx: 0, rLegDx: 0, legH:NORMAL_LEG_H },
   walk:   { torsoSquash:0, lArmDx:-3, lArmDy:-2, rArmDx: 3, rArmDy:2,  lLegDx:-4, rLegDx:+4, legH:NORMAL_LEG_H },
-  crouch: { torsoSquash:2, lArmDx:-2, lArmDy:3,  rArmDx: 2, rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:6 },
+  crouch: { torsoSquash:2, lArmDx:-2, lArmDy:3,  rArmDx: 2, rArmDy:3,  lLegDx: 0, rLegDx: 0, legH:4 },
 }
 
 // =============================================================================
@@ -285,15 +283,15 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
 
   //
   // ── CROUCH  (enter → hold × 2 → rise) ─────────────────────────────────────
-  // legH scaled to NORMAL_LEG_H=12: mid≈67%→8, full≈50%→6
+  // legH scaled to NORMAL_LEG_H=9: mid≈67%→6, full≈44%→4
   { label: 'Crouch', frames: [
     { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H   }, // stand
     { torsoSquash:0, lArmDx:-1, lArmDy: 1, rArmDx:1, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H-1 }, // begin descent
-    { torsoSquash:1, lArmDx:-2, lArmDy: 2, rArmDx:2, rArmDy: 2, lLegDx:0, rLegDx:0, legH:8 },              // mid descent (~65%)
-    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:6 },              // full crouch (~46%)
-    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:6 },              // hold
-    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:6 },              // hold
-    { torsoSquash:1, lArmDx:-2, lArmDy: 2, rArmDx:2, rArmDy: 2, lLegDx:0, rLegDx:0, legH:8 },              // mid rise
+    { torsoSquash:1, lArmDx:-2, lArmDy: 2, rArmDx:2, rArmDy: 2, lLegDx:0, rLegDx:0, legH:6 },              // mid descent
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:4 },              // full crouch
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:4 },              // hold
+    { torsoSquash:2, lArmDx:-2, lArmDy: 3, rArmDx:2, rArmDy: 3, lLegDx:0, rLegDx:0, legH:4 },              // hold
+    { torsoSquash:1, lArmDx:-2, lArmDy: 2, rArmDx:2, rArmDy: 2, lLegDx:0, rLegDx:0, legH:6 },              // mid rise
     { torsoSquash:0, lArmDx:-1, lArmDy: 1, rArmDx:1, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H-1 }, // nearly up
   ]},
 ]
@@ -402,30 +400,21 @@ export function drawNormieCore(
     for (let x = rx; x < rx + rw; x++) set(x, tY + y, true)
   }
 
-  // ── ARMS (upper + forearm + hand blocks) ─────────────────────────────────
+  // ── ARMS — rigid columns; pose translates the whole limb ─────────────────
   const lArmX = topR.rx - armW
   const rArmX = topR.rx + topR.rw
   const armY0 = HR + 1
 
   function fillArm(rootX: number, dx: number, dy: number) {
-    const split  = Math.max(2, Math.floor(armH * 0.52))
-    const lShift = clamp(Math.round(dx * 0.45), -(armW - 1), armW - 1)
-    const lRoot  = rootX + lShift
-    const foreW  = Math.max(2, armW - (armW >= 3 ? 1 : 0))
-
     for (let s = 0; s < armH; s++) {
-      const isUpper = s < split
-      const ax = isUpper ? rootX : lRoot
-      const w  = isUpper ? armW : foreW
-      const ox = isUpper ? 0 : Math.floor((armW - foreW) / 2)
-      const ay = armY0 + s + Math.round(dy * s / Math.max(armH - 1, 1))
-      for (let i = 0; i < w; i++) set(ax + ox + i, ay, true)
+      const t  = s / Math.max(armH - 1, 1)
+      const ax = rootX + Math.round(dx * t)
+      const ay = armY0 + s + Math.round(dy * t)
+      for (let w = 0; w < armW; w++) set(ax + w, ay, true)
     }
-
-    const hx = rootX + Math.round(dx) - (armW > 2 ? 1 : 0)
+    const hx = rootX + Math.round(dx)
     const hy = armY0 + armH + Math.round(dy)
-    for (let r = 0; r < 2; r++)
-      for (let c = 0; c < armW + 1; c++) set(hx + c, hy + r, true)
+    for (let w = 0; w < armW; w++) set(hx + w, hy, true)
   }
 
   fillArm(lArmX, cfg.lArmDx, cfg.lArmDy)
@@ -436,31 +425,23 @@ export function drawNormieCore(
   const hipX = cx - Math.floor(legSpan / 2)
   for (let x = hipX; x < hipX + legSpan; x++) set(x, hipY, true)
 
-  // ── LEGS (thigh → knee step → calf → foot) ─────────────────────────────
+  // ── LEGS — rigid columns + simple shoe block ───────────────────────────
   const lLegX = hipX
   const rLegX = hipX + legW + geo.legGap
   const legY0 = hipY + 1
   const lh = effLegH(cfg.legH)
-  const kneeAt = Math.max(2, Math.floor(lh * 0.55))
 
   function fillLeg(baseX: number, drift: number) {
     for (let s = 0; s < lh; s++) {
       const lx = Math.round(baseX + drift * s / Math.max(lh - 1, 1))
-      let w = legW
-      if (s === kneeAt) w = Math.max(2, legW - 1)
-      const ox = s > kneeAt ? 1 : 0
-      for (let i = 0; i < w; i++) set(lx + ox + i, legY0 + s, true)
+      for (let w = 0; w < legW; w++) set(lx + w, legY0 + s, true)
     }
-
     const ankX = Math.round(baseX + drift)
     const ankY = legY0 + lh
-    for (let i = 0; i < legW; i++) set(ankX + i, ankY, true)
-
-    // Foot block — heel under ankle, toe +1 px forward (character faces right)
+    for (let w = 0; w < legW; w++) set(ankX + w, ankY, true)
     const sw = legW + 2
     for (let r = 0; r < 2; r++)
       for (let c = 0; c < sw; c++) set(ankX - 1 + c, ankY + 1 + r, true)
-    set(ankX + sw - 1, ankY + 2, true)
   }
 
   fillLeg(lLegX, cfg.lLegDx)
