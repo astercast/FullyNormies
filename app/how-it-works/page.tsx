@@ -84,11 +84,11 @@ export default function HowItWorksPage() {
             </h1>
             <p style={{ ...S.body, maxWidth: 560 }}>
               FullNormies generates full-body pixel art sprites for any Normie NFT on demand,
-              server-side, with no dependencies. Each body is a clean solid silhouette —
-              no clothing patterns, just structural variation: five builds (slim to stocky),
-              graduated shoulder shapes, and seeded limb proportions that make every Normie
-              look distinct. Point any game, dapp, or tool at a URL and get a pixel-perfect
-              PNG back — CORS open, CDN-cached, ETag-ready.
+              server-side, with no dependencies. Each body is derived from that Normie&apos;s
+              on-chain portrait width and traits (type, age, gender, facial hair) plus a
+              deterministic seed — so wide faces get broad shoulders, Agents run tall, Young
+              Normies get longer legs, and bearded characters get a thicker neck. Solid blocky
+              silhouettes only; no clothing patterns carved into the body.
             </p>
           </div>
         </section>
@@ -276,12 +276,12 @@ const metas = await res.json()
                   body: 'Pixel and trait data is fetched from api.normies.art for each token ID (0–9999). Pixels: a 1600-char string encoding the 40×40 face grid. Traits: JSON attributes (type, age, hair, expression, etc.).',
                 },
                 {
-                  n: '02', title: 'Deterministic body seed',
-                  body: 'A three-layer hash of the token ID and all trait values produces seed bytes that deterministically select structural proportions: 5 builds (slim → stocky), 5 torso heights, 4 silhouette shapes (straight / chest shelf / V-taper / broad chest), 7 arm-length tiers, and 3 leg-stretch levels. Same ID = same body, every time.',
+                  n: '02', title: 'Portrait + trait body model',
+                  body: 'The engine scans the on-chain face pixels for horizontal span, then combines that with traits (Type, Age, Gender, Facial Feature) and a token hash. Type shifts the skeleton (Agent = tall/broad, Alien = narrow/long legs, Cat = compact, etc.). Age adjusts limb length. Gender biases shoulder vs hip shape. Beard/mustache widens the neck. Same ID + traits = same body every time.',
                 },
                 {
                   n: '03', title: 'Pixel-by-pixel drawing',
-                  body: 'The engine draws every pixel by hand into a 40×80 Uint8ClampedArray — no SVG, no AI, no sprites library. Head pixels are composited from on-chain face data; the body is a clean solid silhouette built from geometric primitives — no clothing patterns or decorations, just structural shape variation across all five build tiers.',
+                  body: 'The engine draws every pixel into a 40×80 buffer — no SVG, no AI. Head pixels come from on-chain data; the body uses a three-zone torso (chest → waist → hips), segmented arms (upper/forearm/hand), knees, and block feet. Six silhouette styles and five build tiers keep variation high while staying blocky and game-ready.',
                 },
                 {
                   n: '04', title: 'Zero-dep PNG encode',

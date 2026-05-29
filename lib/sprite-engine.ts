@@ -12,7 +12,204 @@ export const SW  = 40   // sprite width  (matches Normie head width)
 export const SH  = 80   // sprite height (28 head + body)
 export const HR  = 28   // head rows (captures face, chin, most beard content)
 export const SCL = 5    // display upscale  (40×80 → 200×400)
-export const NORMAL_LEG_H = 11
+export const NORMAL_LEG_H = 12
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, n))
+}
+
+/** Portrait scan — ties shoulder width to the actual on-chain face silhouette. */
+export interface HeadMetrics {
+  minX: number
+  maxX: number
+  width: number
+  centerX: number
+  chinY: number
+}
+
+export function analyzeHead(pixels: string): HeadMetrics | null {
+  let minX = SW, maxX = -1, maxY = -1, count = 0
+  for (let r = 0; r < HR; r++) {
+    for (let c = 0; c < SW; c++) {
+      if (pixels[r * SW + c] !== '1') continue
+      minX = Math.min(minX, c)
+      maxX = Math.max(maxX, c)
+      maxY = Math.max(maxY, r)
+      count++
+    }
+  }
+  if (count === 0) return null
+  return {
+    minX,
+    maxX,
+    width: maxX - minX + 1,
+    centerX: Math.floor((minX + maxX) / 2),
+    chinY: maxY,
+  }
+}
+
+/** Resolved proportions for one Normie — shared by draw + stand anchor. */
+export interface BodyGeometry {
+  cx: number
+  buildLvl: number
+  tH: number
+  tY: number
+  neckW: number
+  shOff: number
+  trapStyle: number
+  chestW: number
+  waistW: number
+  hipW: number
+  armW: number
+  armH: number
+  legW: number
+  legGap: number
+  legSpan: number
+  legStretch: number
+  effLegH: (base: number) => number
+  torsoWidthAt: (row: number) => number
+  rowAt: (row: number) => { rx: number; rw: number }
+}
+
+export function computeBodyGeometry(
+  tokenId: number | null,
+  traits: TraitsData,
+  head: HeadMetrics | null,
+  torsoSquash: number,
+): BodyGeometry {
+  const seed  = traitHash(tokenId, traits)
+  const seed2 = Math.imul(seed, 0x9e3779b9) >>> 0
+  const s2    = (seed >> 16) & 0xff
+  const v0    = seed2 & 0xff
+  const v1    = (seed2 >> 8) & 0xff
+  const v2    = (seed2 >> 16) & 0xff
+  const v3    = (seed2 >> 24) & 0xff
+
+  const normType = tv(traits, 'type')
+  const age      = tv(traits, 'age')
+  const gender   = tv(traits, 'gender')
+  const facial   = tv(traits, 'facial feature')
+
+  const isAgent  = normType === 'agent'
+  const isAlien  = normType === 'alien'
+  const isCat    = normType === 'cat'
+  const isZombie = normType === 'zombie'
+  const isYoung  = age.includes('young')
+  const isOld    = age.includes('old')
+  const isMale   = gender.includes('male') && !gender.includes('female')
+  const hasBeard = facial.includes('beard') || facial.includes('mustache') || facial.includes('goatee')
+
+  const cx = Math.floor(SW / 2)
+
+  // Build: seed tier + trait nudges (each Normie's type/age shifts the frame)
+  let buildLvl = s2 % 5
+  if (isAgent || isOld) buildLvl = clamp(buildLvl + 1, 0, 4)
+  if (isYoung || isAlien) buildLvl = clamp(buildLvl - 1, 0, 4)
+
+  // Head width → body scale (wide portrait = wide shoulders)
+  const headW = head?.width ?? 18
+  const headNudge = clamp(Math.floor((headW - 18) / 2), -2, 2)
+
+  let baseW = clamp(8 + buildLvl + headNudge, 7, 13)
+  if (isAlien) baseW = clamp(baseW - 2, 6, 9)
+  if (isCat) baseW = clamp(baseW - 1, 7, 11)
+  if (isYoung) baseW = clamp(baseW - 1, 7, 12)
+  if (isAgent) baseW = clamp(baseW + 1, 9, 14)
+
+  const torsoVar = v0 % 5
+  let tH = [8, 9, 10, 11, 12][torsoVar]
+  if (isAgent) tH = clamp(tH + 1, 8, 13)
+  if (isZombie || isOld) tH = clamp(tH - 1, 7, 12)
+  if (isCat) tH = clamp(tH - 1, 7, 11)
+  tH -= torsoSquash
+
+  // Silhouette: seed + gender/type bias so bodies feel tied to the character
+  let trapStyle = v3 % 6
+  if (isMale || isAgent) trapStyle = (trapStyle + 2) % 6       // broader chest / V
+  if (!isMale && gender.includes('female')) trapStyle = (trapStyle + 4) % 6  // pear / shelf
+  if (isAlien) trapStyle = 0
+  if (isZombie) trapStyle = (trapStyle + 1) % 6
+
+  const shOff = clamp(
+    (buildLvl >= 3 ? 1 : 0) + (isMale || isAgent ? 1 : 0) + ((v1 & 7) === 7 ? 1 : 0),
+    0, 2,
+  )
+
+  // Three-zone torso: chest / waist / hips (blocky but anatomical)
+  let chestW = baseW + shOff
+  let waistW = clamp(baseW - (trapStyle === 2 || trapStyle === 5 ? 1 : 0), 7, chestW)
+  let hipW = baseW
+  if (trapStyle === 2 || trapStyle === 5) hipW = clamp(baseW - 1, 7, baseW)      // athletic V
+  if (trapStyle === 3) { chestW = baseW + 1; hipW = baseW }                       // broad chest
+  if (trapStyle === 4) { waistW = clamp(baseW - 1, 7, baseW); hipW = baseW + 1 }   // pear / wide hips
+  if (isZombie) hipW = Math.max(hipW, waistW)
+
+  const torsoWidthAt = (row: number) => {
+    const t = row / Math.max(tH - 1, 1)
+    if (t < 0.32) return chestW + (trapStyle === 1 && t < 0.15 ? 1 : 0)
+    if (t < 0.68) {
+      const u = (t - 0.32) / 0.36
+      return Math.round(chestW + (waistW - chestW) * u)
+    }
+    const u = (t - 0.68) / 0.32
+    return Math.round(waistW + (hipW - waistW) * u)
+  }
+
+  const rowAt = (row: number) => {
+    const i = clamp(row, 0, Math.max(tH - 1, 0))
+    const rw = torsoWidthAt(i)
+    return { rx: cx - Math.floor(rw / 2), rw }
+  }
+
+  let legW = buildLvl >= 2 ? 4 : 3
+  if (isAgent || buildLvl >= 4) legW = clamp(legW + 1, 3, 5)
+  if (isAlien || isYoung) legW = clamp(legW - 1, 2, 4)
+  const legGap = Math.max(2, Math.floor((hipW + 1) / 3))
+  const legSpan = legW * 2 + legGap
+
+  let armW = buildLvl >= 2 ? 3 : 2
+  if (isAgent) armW = 3
+  if (isAlien) armW = 2
+
+  let armH = [5, 5, 6, 6, 7, 7, 8][v2 % 7]
+  if (isOld || isCat) armH = clamp(armH - 1, 4, 8)
+  if (isAgent) armH = clamp(armH + 1, 5, 9)
+  if (isYoung) armH = clamp(armH + 1, 5, 9)
+
+  let legStretch = [0, 0, 0, 1, 1, 2][((v3 ^ s2) & 0xff) % 6]
+  if (isYoung || isAgent) legStretch = clamp(legStretch + 1, 0, 2)
+  if (isOld || isCat) legStretch = clamp(legStretch - 1, 0, 2)
+  if (isAlien) legStretch = clamp(legStretch + 1, 0, 2)
+
+  const effLegH = (base: number) =>
+    base + Math.round(legStretch * base / Math.max(NORMAL_LEG_H, 1))
+
+  let neckW = 3 + (buildLvl >= 3 ? 1 : 0)
+  if (hasBeard) neckW = clamp(neckW + 1, 3, 5)
+  if (isAlien) neckW = 2
+
+  return {
+    cx,
+    buildLvl,
+    tH,
+    tY: HR + 2,
+    neckW,
+    shOff,
+    trapStyle,
+    chestW,
+    waistW,
+    hipW,
+    armW,
+    armH,
+    legW,
+    legGap,
+    legSpan,
+    legStretch,
+    effLegH,
+    torsoWidthAt,
+    rowAt,
+  }
+}
 
 // -- Types --------------------------------------------------------------------
 export interface TraitAttr { trait_type: string; value: string }
@@ -88,7 +285,7 @@ export const ANIM_CLIPS: { label: string; frames: PoseCfg[] }[] = [
 
   //
   // ── CROUCH  (enter → hold × 2 → rise) ─────────────────────────────────────
-  // legH values scaled proportionally to NORMAL_LEG_H=12: mid≈65%→8, full≈43%→5
+  // legH scaled to NORMAL_LEG_H=12: mid≈67%→8, full≈50%→6
   { label: 'Crouch', frames: [
     { torsoSquash:0, lArmDx:-1, lArmDy: 0, rArmDx:1, rArmDy: 0, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H   }, // stand
     { torsoSquash:0, lArmDx:-1, lArmDy: 1, rArmDx:1, rArmDy: 1, lLegDx:0, rLegDx:0, legH:NORMAL_LEG_H-1 }, // begin descent
@@ -120,45 +317,16 @@ export function traitHash(id: number | null, traits: TraitsData): number {
 }
 
 /**
- * Extra torso width (total, not per-side) for row `y`.
- * Four styles: straight column, subtle chest shelf, athletic V-taper, broad chest.
- * All tapers are gradual so the body reads as natural, not blocky.
- */
-function torsoRowExtra(trapStyle: number, y: number, tH: number): number {
-  if (trapStyle === 0) return 0
-  const t = y / Math.max(tH - 1, 1)           // 0.0 = top row, 1.0 = bottom row
-  if (trapStyle === 1) return t < 0.4 ? 1 : 0  // subtle chest shelf — 1px wider at top 40%
-  if (trapStyle === 2) return Math.max(0, 2 - Math.round(t * 2.5))  // athletic V — 2→1→0
-  // style 3: broad chest with mid-torso taper
-  if (t < 0.25) return 2
-  if (t < 0.6)  return 1
-  return 0
-}
-
-/**
  * Bottom pixel Y of shoes in **stand** pose (feet together), native 40×80 space.
- * Used by the API anchor — matches `drawNormieCore` geometry for `POSE_CFG.idle` / stand.
+ * Matches `computeBodyGeometry` + stand leg/shoe layout.
  */
 export function standFeetBottomY(tokenId: number | null, traits: TraitsData): number {
-  const seed  = traitHash(tokenId, traits)
-  const seed2 = Math.imul(seed, 0x9e3779b9) >>> 0
-  const s2    = (seed >> 16) & 0xff
-  const s3    = (seed >> 24) & 0xff
-  const v0    = seed2 & 0xff
-  const v3    = (seed2 >> 24) & 0xff
-
-  const torsoVar = v0 % 5
-  const tH       = [8, 9, 10, 11, 12][torsoVar]
-  const hipY     = HR + 2 + tH + 1
-
-  const legStretch = [0, 0, 0, 1, 1, 2][((v3 ^ s2) & 0xff) % 6]
-  const lh         = NORMAL_LEG_H + legStretch
-  const legY0      = hipY + 1
-  const ankY       = legY0 + lh
-  const shoeType   = s3 % 5
-  const sh         = [2, 3, 2, 2, 2][shoeType]
-  const sy         = shoeType === 1 ? ankY : ankY + 1
-  return sy + sh - 1
+  const geo = computeBodyGeometry(tokenId, traits, null, 0)
+  const hipY = geo.tY + geo.tH + 1
+  const lh = geo.effLegH(NORMAL_LEG_H)
+  const ankY = hipY + 1 + lh
+  const shoeRows = 2
+  return ankY + shoeRows
 }
 
 // -- Canvas sprite factory ----------------------------------------------------
@@ -183,11 +351,7 @@ function createSprite(transparent = false) {
 }
 
 // =============================================================================
-//  drawNormieCore — pure drawing logic, no DOM. Shared with server engine.
-//  `set(x, y, dark)`:  dark=true → PD pixel, dark=false → background/clear
-//
-//  Bodies are clean solid silhouettes — all variation is structural (proportions,
-//  shape, limb sizes). No patterns or designs carved into the body.
+//  drawNormieCore — trait + portrait-aware blocky bodies (solid silhouettes).
 // =============================================================================
 export function drawNormieCore(
   pixels: string,
@@ -196,63 +360,21 @@ export function drawNormieCore(
   tokenId: number | null,
   set: (x: number, y: number, dark: boolean) => void
 ): void {
-
-  // ── Seed extraction — structural variation only ──────────────────────────
-  const seed  = traitHash(tokenId, traits)
-  const seed2 = Math.imul(seed, 0x9e3779b9) >>> 0
-  const s2    = (seed >> 16) & 0xff   // build
-  const v0    = seed2         & 0xff   // torso height
-  const v1    = (seed2 >>  8) & 0xff   // shoulder / neck
-  const v2    = (seed2 >> 16) & 0xff   // arm length
-  const v3    = (seed2 >> 24) & 0xff   // silhouette + leg stretch
-
-  const normType = tv(traits, 'type')
-  const age      = tv(traits, 'age')
-  const isAlien  = normType === 'alien'
-  const isYoung  = age.includes('young')
-  const cx       = Math.floor(SW / 2)
-
-  // ── Build & proportions (5 levels: slim → stocky) ────────────────────────
-  const buildLvl = s2 % 5
-  const tW = isAlien ? 7 : isYoung
-    ? [7, 8, 9, 10, 11][buildLvl]
-    : [8, 9, 10, 11, 12][buildLvl]
-
-  // Torso height: 5 distinct levels
-  const torsoVar = v0 % 5
-  const tH       = [8, 9, 10, 11, 12][torsoVar] - cfg.torsoSquash
-
-  // Shoulder cap: only broader builds get it
-  const shOff = buildLvl >= 3 ? 1 : ((v1 & 7) === 7 ? 1 : 0)
-
-  // Torso silhouette: straight / chest shelf / V-taper / broad chest
-  const trapStyle = v3 % 4
-
-  // Legs: 3px slim/lean, 4px regular+
-  const legW  = buildLvl >= 2 ? 4 : 3
-  const legGap = Math.max(3, Math.floor(tW / 3))
-  const legSpan = legW * 2 + legGap
-
-  // Arms: 2px slim builds, 3px medium+
-  const armW = buildLvl >= 2 ? 3 : 2
-
-  // Leg length variation (±0–2 px)
-  const legStretch = [0, 0, 0, 1, 1, 2][((v3 ^ s2) & 0xff) % 6]
-  const effLegH    = (base: number) =>
-    base + Math.round(legStretch * base / Math.max(NORMAL_LEG_H, 1))
+  const head = analyzeHead(pixels)
+  const geo  = computeBodyGeometry(tokenId, traits, head, cfg.torsoSquash)
+  const { cx, tH, tY, neckW, armW, armH, legW, legSpan, effLegH, rowAt } = geo
 
   // ── NECK ─────────────────────────────────────────────────────────────────
-  const neckW = 3 + (buildLvl >= 3 || (v1 % 4 === 0) ? 1 : 0)
   const neckX = cx - Math.floor(neckW / 2)
   for (let x = neckX; x < neckX + neckW; x++) set(x, HR, true)
 
-  // ── SHOULDER ROW ─────────────────────────────────────────────────────────
-  const upperExtra = Math.max(torsoRowExtra(trapStyle, 0, tH), torsoRowExtra(trapStyle, 1, tH))
-  const shW = tW + shOff * 2 + upperExtra
+  // ── SHOULDERS (deltoid cap from chest width + seed offset) ─────────────
+  const topR = rowAt(0)
+  const shW = topR.rw + geo.shOff * 2
   const shX = cx - Math.floor(shW / 2)
   for (let x = shX; x < shX + shW; x++) set(x, HR + 1, true)
 
-  // ── HEAD (rows 0–27) ─────────────────────────────────────────────────────
+  // ── HEAD ─────────────────────────────────────────────────────────────────
   let anyFace = false
   for (let r = 0; r < HR; r++)
     for (let c = 0; c < SW; c++)
@@ -273,37 +395,34 @@ export function drawNormieCore(
     set(hx+5,my+1,false); set(hx+6,my+1,false); set(hx+7,my+1,false); set(hx+8,my+1,false)
   }
 
-  // ── TORSO — clean solid fill, silhouette shape only ───────────────────────
-  const tY = HR + 2
+  // ── TORSO (chest → waist → hip zones) ───────────────────────────────────
   for (let y = 0; y < tH; y++) {
-    const rw = tW + torsoRowExtra(trapStyle, y, tH)
+    const rw = geo.torsoWidthAt(y)
     const rx = cx - Math.floor(rw / 2)
     for (let x = rx; x < rx + rw; x++) set(x, tY + y, true)
   }
 
-  const rowAt = (torsoRowIdx: number) => {
-    const i = Math.max(0, Math.min(tH - 1, torsoRowIdx))
-    const rw = tW + torsoRowExtra(trapStyle, i, tH)
-    return { rx: cx - Math.floor(rw / 2), rw }
-  }
-
-  // ── ARMS ─────────────────────────────────────────────────────────────────
-  const armH  = [5, 5, 6, 6, 7, 7, 8][v2 % 7]
-  const topR  = rowAt(0)
+  // ── ARMS (upper + forearm + hand blocks) ─────────────────────────────────
   const lArmX = topR.rx - armW
   const rArmX = topR.rx + topR.rw
   const armY0 = HR + 1
 
   function fillArm(rootX: number, dx: number, dy: number) {
-    const split  = Math.floor(armH * 0.55)
-    const lShift = Math.min(Math.max(Math.round(dx * 0.5), -(armW - 1)), armW - 1)
+    const split  = Math.max(2, Math.floor(armH * 0.52))
+    const lShift = clamp(Math.round(dx * 0.45), -(armW - 1), armW - 1)
     const lRoot  = rootX + lShift
+    const foreW  = Math.max(2, armW - (armW >= 3 ? 1 : 0))
+
     for (let s = 0; s < armH; s++) {
-      const ax = s < split ? rootX : lRoot
+      const isUpper = s < split
+      const ax = isUpper ? rootX : lRoot
+      const w  = isUpper ? armW : foreW
+      const ox = isUpper ? 0 : Math.floor((armW - foreW) / 2)
       const ay = armY0 + s + Math.round(dy * s / Math.max(armH - 1, 1))
-      for (let w = 0; w < armW; w++) set(ax + w, ay, true)
+      for (let i = 0; i < w; i++) set(ax + ox + i, ay, true)
     }
-    const hx = rootX + Math.round(dx) - (armW > 1 ? 1 : 0)
+
+    const hx = rootX + Math.round(dx) - (armW > 2 ? 1 : 0)
     const hy = armY0 + armH + Math.round(dy)
     for (let r = 0; r < 2; r++)
       for (let c = 0; c < armW + 1; c++) set(hx + c, hy + r, true)
@@ -312,33 +431,40 @@ export function drawNormieCore(
   fillArm(lArmX, cfg.lArmDx, cfg.lArmDy)
   fillArm(rArmX, cfg.rArmDx, cfg.rArmDy)
 
-  // ── HIP ──────────────────────────────────────────────────────────────────
+  // ── HIP BRIDGE ─────────────────────────────────────────────────────────
   const hipY = tY + tH + 1
   const hipX = cx - Math.floor(legSpan / 2)
   for (let x = hipX; x < hipX + legSpan; x++) set(x, hipY, true)
 
-  // ── LEGS + SHOES (clean, no pants patterns) ───────────────────────────────
-  const lLegX = cx - Math.floor(legSpan / 2)
-  const rLegX = lLegX + legW + legGap
+  // ── LEGS (thigh → knee step → calf → foot) ─────────────────────────────
+  const lLegX = hipX
+  const rLegX = hipX + legW + geo.legGap
   const legY0 = hipY + 1
+  const lh = effLegH(cfg.legH)
+  const kneeAt = Math.max(2, Math.floor(lh * 0.55))
 
-  function fillLeg(baseX: number, drift: number, lh: number) {
+  function fillLeg(baseX: number, drift: number) {
     for (let s = 0; s < lh; s++) {
       const lx = Math.round(baseX + drift * s / Math.max(lh - 1, 1))
-      for (let w = 0; w < legW; w++) set(lx + w, legY0 + s, true)
+      let w = legW
+      if (s === kneeAt) w = Math.max(2, legW - 1)
+      const ox = s > kneeAt ? 1 : 0
+      for (let i = 0; i < w; i++) set(lx + ox + i, legY0 + s, true)
     }
-    // Ankle
+
     const ankX = Math.round(baseX + drift)
     const ankY = legY0 + lh
-    for (let w = 0; w < legW; w++) set(ankX + w, ankY, true)
-    // Shoe — consistent block, always same direction
+    for (let i = 0; i < legW; i++) set(ankX + i, ankY, true)
+
+    // Foot block — heel under ankle, toe +1 px forward (character faces right)
     const sw = legW + 2
     for (let r = 0; r < 2; r++)
       for (let c = 0; c < sw; c++) set(ankX - 1 + c, ankY + 1 + r, true)
+    set(ankX + sw - 1, ankY + 2, true)
   }
 
-  fillLeg(lLegX, cfg.lLegDx, effLegH(cfg.legH))
-  fillLeg(rLegX, cfg.rLegDx, effLegH(cfg.legH))
+  fillLeg(lLegX, cfg.lLegDx)
+  fillLeg(rLegX, cfg.rLegDx)
 }
 
 // =============================================================================

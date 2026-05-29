@@ -55,13 +55,13 @@ const WALK_CFGS: PoseCfg[] = [
 // to simulate the natural height peak mid-stride.
 const WALK_BOB_PX = [0, 1, 0, 1]
 
-// Sit: arms resting at side, bent legs (legH ~50% of normal for seated look)
+// Sit: bent legs (~50% stand height)
 const SIT_CFG: PoseCfg = {
   torsoSquash: 0,
   lArmDx: -2, lArmDy: 2,
   rArmDx:  2, rArmDy: 2,
   lLegDx: -1, rLegDx: 1,
-  legH: 6,
+  legH: Math.max(5, Math.round(NORMAL_LEG_H * 0.5)),
 }
 
 // ---------------------------------------------------------------------------
