@@ -14,6 +14,53 @@ export const HR  = 28   // head rows (captures face, chin, most beard content)
 export const SCL = 5    // display upscale  (40×80 → 200×400)
 export const NORMAL_LEG_H = 9
 
+/** Bump when body rules or meta schema change — surfaced in full-meta.json. */
+export const ENGINE_VERSION = 'fullnormies-engine-v2'
+
+const BUILD_LABELS = ['slim', 'lean', 'regular', 'medium', 'athletic', 'broad', 'stocky'] as const
+const SILHOUETTE_LABELS = [
+  'column', 'shelf', 'v-taper', 'broad', 'pear', 'compact', 'tall', 'statue',
+] as const
+
+/** Lightweight body fingerprint for game clients (from full-meta.json). */
+export interface BodyProfileSummary {
+  build: number
+  buildLabel: string
+  silhouette: number
+  silhouetteLabel: string
+  torsoRows: number
+  chestPx: number
+  waistPx: number
+  hipPx: number
+  armWidthPx: number
+  armLengthPx: number
+  legWidthPx: number
+  legLengthPx: number
+}
+
+export function summarizeBodyProfile(
+  tokenId: number | null,
+  traits: TraitsData,
+  pixels?: string | null,
+): BodyProfileSummary {
+  const head = pixels ? analyzeHead(pixels) : null
+  const geo  = computeBodyGeometry(tokenId, traits, head, 0)
+  return {
+    build:           geo.buildLvl,
+    buildLabel:      BUILD_LABELS[geo.buildLvl] ?? 'regular',
+    silhouette:      geo.trapStyle,
+    silhouetteLabel: SILHOUETTE_LABELS[geo.trapStyle] ?? 'column',
+    torsoRows:       geo.tH,
+    chestPx:         geo.chestW,
+    waistPx:         geo.waistW,
+    hipPx:           geo.hipW,
+    armWidthPx:      geo.armW,
+    armLengthPx:     geo.armH,
+    legWidthPx:      geo.legW,
+    legLengthPx:     geo.effLegH(NORMAL_LEG_H),
+  }
+}
+
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n))
 }
@@ -79,16 +126,21 @@ export function computeBodyGeometry(
 ): BodyGeometry {
   const seed  = traitHash(tokenId, traits)
   const seed2 = Math.imul(seed, 0x9e3779b9) >>> 0
+  const seed3 = Math.imul(seed2, 0x517cc1b7) >>> 0
   const s2    = (seed >> 16) & 0xff
   const v0    = seed2 & 0xff
   const v1    = (seed2 >> 8) & 0xff
   const v2    = (seed2 >> 16) & 0xff
   const v3    = (seed2 >> 24) & 0xff
+  const v4    = seed3 & 0xff
+  const v5    = (seed3 >> 8) & 0xff
 
   const normType = tv(traits, 'type')
   const age      = tv(traits, 'age')
   const gender   = tv(traits, 'gender')
   const facial   = tv(traits, 'facial feature')
+  const expr     = tv(traits, 'expression')
+  const hair     = tv(traits, 'hair style')
 
   const isAgent  = normType === 'agent'
   const isAlien  = normType === 'alien'
@@ -99,59 +151,63 @@ export function computeBodyGeometry(
   const isMale   = gender.includes('male') && !gender.includes('female')
   const hasBeard = facial.includes('beard') || facial.includes('mustache') || facial.includes('goatee')
 
+  const exprMix = expr.length > 0 ? expr.charCodeAt(0) : 0
+  const hairMix = hair.length > 0 ? (hair.charCodeAt(0) ^ hair.length) : 0
+
   const cx = Math.floor(SW / 2)
 
-  // Build: seed tier + trait nudges (each Normie's type/age shifts the frame)
-  let buildLvl = s2 % 5
-  if (isAgent || isOld) buildLvl = clamp(buildLvl + 1, 0, 4)
-  if (isYoung || isAlien) buildLvl = clamp(buildLvl - 1, 0, 4)
+  // 7 build tiers + trait nudges — wider spread, still thinner absolute widths
+  let buildLvl = (s2 + (v4 & 3)) % 7
+  if (isAgent || isOld) buildLvl = clamp(buildLvl + 1, 0, 6)
+  if (isYoung || isAlien) buildLvl = clamp(buildLvl - 1, 0, 6)
 
-  // Head width → body scale (wide portrait = wide shoulders)
   const headW = head?.width ?? 18
-  const headNudge = clamp(Math.floor((headW - 18) / 2), -2, 2)
+  const headNudge = clamp(Math.floor((headW - 18) / 3), -1, 2)
 
-  let baseW = clamp(8 + buildLvl + headNudge, 7, 13)
-  if (isAlien) baseW = clamp(baseW - 2, 6, 9)
-  if (isCat) baseW = clamp(baseW - 1, 7, 11)
-  if (isYoung) baseW = clamp(baseW - 1, 7, 12)
-  if (isAgent) baseW = clamp(baseW + 1, 9, 14)
+  let baseW = clamp(6 + Math.floor(buildLvl * 0.75) + headNudge, 6, 11)
+  if (isAlien) baseW = clamp(baseW - 1, 5, 8)
+  if (isCat) baseW = clamp(baseW - 1, 6, 10)
+  if (isYoung) baseW = clamp(baseW - 1, 5, 10)
+  if (isAgent) baseW = clamp(baseW + 1, 7, 12)
 
-  const torsoVar = v0 % 5
-  let tH = [8, 9, 10, 11, 12][torsoVar]
-  if (isAgent) tH = clamp(tH + 1, 8, 13)
-  if (isZombie || isOld) tH = clamp(tH - 1, 7, 12)
-  if (isCat) tH = clamp(tH - 1, 7, 11)
+  // 7 torso heights — expression/hair mix extra variety
+  const torsoVar = (v0 + (hairMix & 3) + (exprMix & 1)) % 7
+  let tH = [7, 8, 9, 10, 10, 11, 12][torsoVar]
+  if (isAgent) tH = clamp(tH + 1, 7, 13)
+  if (isZombie || isOld) tH = clamp(tH - 1, 6, 12)
+  if (isCat) tH = clamp(tH - 1, 6, 11)
   tH -= torsoSquash
 
-  // Silhouette: seed + gender/type bias so bodies feel tied to the character
-  let trapStyle = v3 % 6
-  if (isMale || isAgent) trapStyle = (trapStyle + 2) % 6       // broader chest / V
-  if (!isMale && gender.includes('female')) trapStyle = (trapStyle + 4) % 6  // pear / shelf
+  // 8 silhouette styles — gender/type + secondary seed
+  let trapStyle = (v3 + (v5 & 7) + (exprMix & 3)) % 8
+  if (isMale || isAgent) trapStyle = (trapStyle + 2) % 8
+  if (!isMale && gender.includes('female')) trapStyle = (trapStyle + 5) % 8
   if (isAlien) trapStyle = 0
-  if (isZombie) trapStyle = (trapStyle + 1) % 6
+  if (isZombie) trapStyle = (trapStyle + 1) % 8
 
   const shOff = clamp(
-    (buildLvl >= 3 ? 1 : 0) + (isMale || isAgent ? 1 : 0) + ((v1 & 7) === 7 ? 1 : 0),
-    0, 2,
+    (buildLvl >= 5 ? 1 : 0) + (isMale && buildLvl >= 3 ? 1 : 0) + ((v1 & 15) === 15 ? 1 : 0),
+    0, 1,
   )
 
-  // Three-zone torso: chest / waist / hips (blocky but anatomical)
   let chestW = baseW + shOff
-  let waistW = clamp(baseW - (trapStyle === 2 || trapStyle === 5 ? 1 : 0), 7, chestW)
+  let waistW = clamp(chestW - 1 - (trapStyle % 4 === 0 ? 0 : 1), 5, chestW)
   let hipW = baseW
-  if (trapStyle === 2 || trapStyle === 5) hipW = clamp(baseW - 1, 7, baseW)      // athletic V
-  if (trapStyle === 3) { chestW = baseW + 1; hipW = baseW }                       // broad chest
-  if (trapStyle === 4) { waistW = clamp(baseW - 1, 7, baseW); hipW = baseW + 1 }   // pear / wide hips
+  if (trapStyle === 2 || trapStyle === 6) { waistW = clamp(chestW - 2, 5, chestW); hipW = clamp(baseW - 1, 5, baseW) }
+  if (trapStyle === 3) { chestW = baseW + 1; waistW = clamp(baseW - 1, 5, chestW); hipW = baseW }
+  if (trapStyle === 4) { waistW = clamp(baseW - 1, 5, baseW); hipW = baseW + 1 }
+  if (trapStyle === 5) { chestW = clamp(baseW - 1, 5, baseW); waistW = chestW; hipW = chestW }
+  if (trapStyle === 7) { chestW = baseW + 1; hipW = baseW }
   if (isZombie) hipW = Math.max(hipW, waistW)
 
   const torsoWidthAt = (row: number) => {
     const t = row / Math.max(tH - 1, 1)
-    if (t < 0.32) return chestW + (trapStyle === 1 && t < 0.15 ? 1 : 0)
-    if (t < 0.68) {
-      const u = (t - 0.32) / 0.36
+    if (t < 0.30) return chestW + (trapStyle === 1 && t < 0.12 ? 1 : 0)
+    if (t < 0.65) {
+      const u = (t - 0.30) / 0.35
       return Math.round(chestW + (waistW - chestW) * u)
     }
-    const u = (t - 0.68) / 0.32
+    const u = (t - 0.65) / 0.35
     return Math.round(waistW + (hipW - waistW) * u)
   }
 
@@ -161,29 +217,30 @@ export function computeBodyGeometry(
     return { rx: cx - Math.floor(rw / 2), rw }
   }
 
-  let legW = buildLvl >= 2 ? 4 : 3
-  if (isAgent || buildLvl >= 4) legW = clamp(legW + 1, 3, 5)
-  if (isAlien || isYoung) legW = clamp(legW - 1, 2, 4)
-  const legGap = Math.max(2, Math.floor((hipW + 1) / 3))
+  // Thinner limbs — 2px default, 3px only on largest builds / agent
+  let legW = buildLvl >= 4 ? 3 : 2
+  if (isAlien || isYoung) legW = 2
+  if (isAgent && buildLvl >= 3) legW = 3
+
+  const legGap = Math.max(2, Math.floor((hipW + 2) / 4))
   const legSpan = legW * 2 + legGap
 
-  let armW = buildLvl >= 2 ? 3 : 2
-  if (isAgent) armW = 3
-  if (isAlien) armW = 2
+  let armW = buildLvl >= 5 ? 3 : 2
+  if (isAgent && buildLvl >= 2) armW = 3
+  if (isAlien || isYoung) armW = 2
 
-  let armH = [4, 5, 5, 6, 6, 6, 7][v2 % 7]
-  if (isOld || isCat) armH = clamp(armH - 1, 4, 7)
-  if (isAgent) armH = clamp(armH + 1, 4, 7)
+  let armH = [4, 4, 5, 5, 6, 6, 7, 7, 8][(v2 + (v4 >> 2) + (hairMix & 1)) % 9]
+  if (isOld || isCat) armH = clamp(armH - 1, 4, 8)
+  if (isAgent) armH = clamp(armH + 1, 4, 8)
 
-  // Leg length: flat +0/+1 px only — keeps stand height stable, less limb stretch
-  let legStretch = [0, 0, 0, 0, 0, 1][((v3 ^ s2) & 0xff) % 6]
-  if (isOld || isCat) legStretch = 0
+  let legStretch = [0, 0, 0, 0, 0, 1, 1][((v3 ^ s2 ^ v5) & 0xff) % 7]
+  if (isOld || isCat) legStretch = Math.max(0, legStretch - 1)
   if (isAlien) legStretch = Math.min(legStretch + 1, 1)
 
   const effLegH = (base: number) => base + legStretch
 
-  let neckW = 3 + (buildLvl >= 3 ? 1 : 0)
-  if (hasBeard) neckW = clamp(neckW + 1, 3, 5)
+  let neckW = 2 + (buildLvl >= 4 ? 1 : 0)
+  if (hasBeard) neckW = clamp(neckW + 1, 2, 4)
   if (isAlien) neckW = 2
 
   return {

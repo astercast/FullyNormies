@@ -5,7 +5,7 @@
 //  Returns an array of full-meta objects — useful for prefetching a dorm roster.
 // =============================================================================
 import { NextRequest, NextResponse } from 'next/server'
-import { API_POSES, NATIVE_WIDTH, NATIVE_HEIGHT, normieStandAnchor, WALK_FRAME_COUNT } from '@/lib/sprite-engine-server'
+import { buildSpriteMeta } from '@/lib/sprite-engine-server'
 
 interface TraitAttr { trait_type: string; value: string }
 interface TraitsPayload { attributes: TraitAttr[] }
@@ -25,17 +25,21 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS })
 }
 
-async function probeMeta(id: number): Promise<{ id: number; exists: boolean; traits?: TraitsPayload }> {
+async function probeMeta(id: number): Promise<{ id: number; exists: boolean; traits?: TraitsPayload; pixels?: string }> {
   try {
     const [pr, tr] = await Promise.all([
       fetch(`https://api.normies.art/normie/${id}/pixels`, { next: { revalidate: 3600 } }),
       fetch(`https://api.normies.art/normie/${id}/traits`,  { next: { revalidate: 3600 } }),
     ])
-    if (!pr.ok || !tr.ok) return { id, exists: false }
-    const pixels = await pr.text()
-    if (pixels.length !== 1600) return { id, exists: false }
+    if (!tr.ok) return { id, exists: false }
     const traits = (await tr.json()) as TraitsPayload
-    return { id, exists: true, traits }
+    if (!traits.attributes?.length) return { id, exists: false }
+    let pixels: string | undefined
+    if (pr.ok) {
+      const text = await pr.text()
+      if (text.length === 1600) pixels = text
+    }
+    return { id, exists: true, traits, pixels }
   } catch {
     return { id, exists: false }
   }
@@ -76,20 +80,11 @@ export async function POST(req: NextRequest) {
   // Probe each normie in parallel
   const probes = await Promise.all(ids.map(probeMeta))
 
-  const results = probes.map(({ id, exists, traits }) => ({
-    id,
-    exists,
-    ...(exists && traits ? {
-      pixelWidth:     NATIVE_WIDTH,
-      pixelHeight:    NATIVE_HEIGHT,
-      anchor:         normieStandAnchor(id, traits),
-      posesAvailable: API_POSES,
-      walkFrames:     WALK_FRAME_COUNT,
-      facing:         'right',
-      source:         'fullnormies-engine-v1',
-      updatedAt:      new Date().toISOString(),
-    } : { status: 'not_found' as const }),
-  }))
+  const results = probes.map(({ id, exists, traits, pixels }) =>
+    exists && traits
+      ? buildSpriteMeta(id, traits, pixels)
+      : { id, exists: false, status: 'not_found' as const },
+  )
 
   return NextResponse.json(results, {
     headers: {

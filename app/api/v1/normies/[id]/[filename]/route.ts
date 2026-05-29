@@ -9,7 +9,7 @@
 //    face.png        (proxied from api.normies.art — 40×40 face fallback)
 // =============================================================================
 import { NextRequest, NextResponse } from 'next/server'
-import { drawNormieServer, buildSpriteSheet, API_POSES, ApiPose, NATIVE_WIDTH, NATIVE_HEIGHT, normieStandAnchor, WALK_FRAME_COUNT } from '@/lib/sprite-engine-server'
+import { drawNormieServer, buildSpriteSheet, API_POSES, ApiPose, NATIVE_WIDTH, NATIVE_HEIGHT, normieStandAnchor, WALK_FRAME_COUNT, buildSpriteMeta, ENGINE_VERSION, summarizeBodyProfile } from '@/lib/sprite-engine-server'
 import { encodePng } from '@/lib/png-encode'
 
 export const maxDuration = 30
@@ -128,18 +128,7 @@ export async function GET(
         { status: 404, headers: CORS }
       )
     }
-    return jsonResponse({
-      id,
-      exists:          true,
-      pixelWidth:      NATIVE_WIDTH,
-      pixelHeight:     NATIVE_HEIGHT,
-      anchor:          normieStandAnchor(id, data.traits),
-      posesAvailable:  API_POSES,
-      walkFrames:      WALK_FRAME_COUNT,
-      facing:          'right',
-      source:          'fullnormies-engine-v1',
-      updatedAt:       new Date().toISOString(),
-    })
+    return jsonResponse(buildSpriteMeta(id, data.traits, data.pixels))
   }
 
   // ── sheet.json ────────────────────────────────────────────────────────────
@@ -149,6 +138,7 @@ export async function GET(
       return errResponse('Normie not found or pixel data unavailable', 404)
     }
     return jsonResponse({
+      engineVersion: ENGINE_VERSION,
       frameWidth:  NATIVE_WIDTH,
       frameHeight: NATIVE_HEIGHT,
       totalFrames: 7,
@@ -158,8 +148,11 @@ export async function GET(
         sit:   [5],
         sleep: [6],
       },
-      anchor: normieStandAnchor(id, data.traits),
-      note:   'All sprites face right. Flip horizontally in client for left-facing. Anchor is stand-feet for this normie.',
+      anchor:      normieStandAnchor(id, data.traits),
+      bodyProfile: summarizeBodyProfile(id, data.traits, data.pixels),
+      palette:     { ink: '#48494b', fill: '#e3e5e4', background: 'transparent' },
+      recommendedScale: [2, 3, 4, 5],
+      note:        'All sprites face right. Flip horizontally in client for left-facing. Use anchor for floor placement.',
     }, 86400)  // sheet layout never changes — long cache
   }
 

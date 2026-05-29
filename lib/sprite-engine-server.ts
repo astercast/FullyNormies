@@ -9,7 +9,12 @@
 //    sit    — chair / desk pose (special leg geometry)
 //    sleep  — lying down (horizontal body at bottom of canvas)
 // =============================================================================
-import { drawNormieCore, traitHash, tv, PoseCfg, TraitsData, PL, PD, SW, SH, NORMAL_LEG_H, standFeetBottomY } from './sprite-engine'
+import {
+  drawNormieCore, traitHash, tv, PoseCfg, TraitsData, PL, PD, SW, SH,
+  NORMAL_LEG_H, standFeetBottomY, ENGINE_VERSION, summarizeBodyProfile,
+} from './sprite-engine'
+
+export { ENGINE_VERSION, summarizeBodyProfile } from './sprite-engine'
 
 // ---------------------------------------------------------------------------
 //  Public types
@@ -24,6 +29,39 @@ export const NATIVE_HEIGHT = SH   // 80 px
 /** Bottom-center of feet in stand pose; `y` varies with torso length + leg stretch seed. */
 export function normieStandAnchor(tokenId: number | null, traits: TraitsData): { x: number; y: number } {
   return { x: Math.floor(SW / 2), y: standFeetBottomY(tokenId, traits) }
+}
+
+/** Game-ready metadata bundle — use from full-meta.json and batch endpoints. */
+export function buildSpriteMeta(id: number, traits: TraitsData, pixels?: string) {
+  return {
+    id,
+    exists:          true as const,
+    engineVersion:   ENGINE_VERSION,
+    pixelWidth:      NATIVE_WIDTH,
+    pixelHeight:     NATIVE_HEIGHT,
+    anchor:          normieStandAnchor(id, traits),
+    posesAvailable:  API_POSES,
+    walkFrames:      WALK_FRAME_COUNT,
+    facing:          'right' as const,
+    palette: {
+      ink:        '#48494b',
+      fill:       '#e3e5e4',
+      background: 'transparent',
+    },
+    recommendedScale: [2, 3, 4, 5],
+    bodyProfile: summarizeBodyProfile(id, traits, pixels),
+    sprites: {
+      stand:     `/api/v1/normies/${id}/full.png?pose=stand`,
+      walk:      `/api/v1/normies/${id}/full.png?pose=walk&frame=0`,
+      sit:       `/api/v1/normies/${id}/full.png?pose=sit`,
+      sleep:     `/api/v1/normies/${id}/full.png?pose=sleep`,
+      sheet:     `/api/v1/normies/${id}/sheet.png`,
+      sheetMeta: `/api/v1/normies/${id}/sheet.json`,
+      face:      `/api/v1/normies/${id}/face.png`,
+    },
+    source:    ENGINE_VERSION,
+    updatedAt: new Date().toISOString(),
+  }
 }
 
 // ---------------------------------------------------------------------------

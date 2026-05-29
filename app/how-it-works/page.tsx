@@ -277,7 +277,7 @@ const metas = await res.json()
                 },
                 {
                   n: '02', title: 'Portrait + trait body model',
-                  body: 'The engine scans the on-chain face pixels for horizontal span, then combines that with traits (Type, Age, Gender, Facial Feature) and a token hash. Type shifts the skeleton (Agent = tall/broad, Alien = narrow/long legs, Cat = compact, etc.). Age adjusts limb length. Gender biases shoulder vs hip shape. Beard/mustache widens the neck. Same ID + traits = same body every time.',
+                  body: 'The engine scans face pixels for width, then combines Type, Age, Gender, Expression, Hair, and Facial Feature traits with a token hash. Seven build tiers, eight silhouette styles, nine arm-length tiers, and seven torso heights produce distinct bodies that still read as the same Normie. full-meta.json returns a bodyProfile object plus ready-to-fetch sprite URLs for game clients.',
                 },
                 {
                   n: '03', title: 'Pixel-by-pixel drawing',

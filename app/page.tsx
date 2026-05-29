@@ -128,7 +128,7 @@ export default function Home() {
 
                 <p style={{ fontSize: 'clamp(.8rem,2vw,.95rem)', color: 'var(--ink-mid)', lineHeight: 1.85, marginBottom: 'clamp(1rem,3vw,2rem)' }}>
                   Every Normie NFT as a live-generated, game-ready full-body sprite.<br />
-                  Bodies scale to each portrait. Five builds. One URL. Four poses.
+                  Portrait-matched bodies. 7 builds × 8 silhouettes. One URL. Four poses.
                 </p>
 
                 <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
@@ -174,6 +174,7 @@ export default function Home() {
               {[
                 ['9,999',     'Normies'],
                 ['9,999',     'Unique body shapes'],
+                ['7×8',       'Builds × silhouettes'],
                 ['4',         'Poses  (stand / walk / sit / sleep)'],
                 ['40×80 px',  'Native resolution'],
                 ['0',         'External dependencies'],

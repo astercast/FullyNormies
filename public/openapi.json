@@ -228,17 +228,52 @@
       },
       "FullMeta": {
         "type": "object",
+        "description": "Game-ready sprite metadata. Fetch once per character to size canvases, place on floors, and wire animation URLs.",
         "properties": {
-          "id":             { "type": "integer" },
-          "exists":         { "type": "boolean" },
-          "pixelWidth":     { "type": "integer", "description": "Native sprite width in pixels", "example": 40 },
-          "pixelHeight":    { "type": "integer", "description": "Native sprite height in pixels", "example": 80 },
-          "anchor":         { "$ref": "#/components/schemas/Anchor" },
-          "posesAvailable": { "type": "array", "items": { "type": "string" } },
-          "walkFrames":     { "type": "integer", "example": 4 },
-          "facing":         { "type": "string", "enum": ["right"], "description": "All sprites face right; flip in client for left-facing" },
-          "source":         { "type": "string" },
-          "updatedAt":      { "type": "string", "format": "date-time" }
+          "id":               { "type": "integer" },
+          "exists":           { "type": "boolean", "enum": [true] },
+          "engineVersion":    { "type": "string", "example": "fullnormies-engine-v2" },
+          "pixelWidth":       { "type": "integer", "example": 40 },
+          "pixelHeight":      { "type": "integer", "example": 80 },
+          "anchor":           { "$ref": "#/components/schemas/Anchor" },
+          "posesAvailable":   { "type": "array", "items": { "type": "string" } },
+          "walkFrames":       { "type": "integer", "example": 4 },
+          "facing":           { "type": "string", "enum": ["right"] },
+          "palette": {
+            "type": "object",
+            "properties": {
+              "ink":        { "type": "string", "example": "#48494b" },
+              "fill":       { "type": "string", "example": "#e3e5e4" },
+              "background": { "type": "string", "example": "transparent" }
+            }
+          },
+          "recommendedScale": { "type": "array", "items": { "type": "integer" }, "example": [2, 3, 4, 5] },
+          "bodyProfile":      { "$ref": "#/components/schemas/BodyProfile" },
+          "sprites": {
+            "type": "object",
+            "description": "Ready-to-fetch relative URLs for this normie",
+            "additionalProperties": { "type": "string" }
+          },
+          "source":           { "type": "string" },
+          "updatedAt":        { "type": "string", "format": "date-time" }
+        }
+      },
+      "BodyProfile": {
+        "type": "object",
+        "description": "Deterministic body fingerprint derived from portrait width + on-chain traits + token seed.",
+        "properties": {
+          "build":             { "type": "integer", "minimum": 0, "maximum": 6 },
+          "buildLabel":        { "type": "string", "example": "athletic" },
+          "silhouette":        { "type": "integer", "minimum": 0, "maximum": 7 },
+          "silhouetteLabel":   { "type": "string", "example": "v-taper" },
+          "torsoRows":         { "type": "integer" },
+          "chestPx":           { "type": "integer" },
+          "waistPx":           { "type": "integer" },
+          "hipPx":             { "type": "integer" },
+          "armWidthPx":        { "type": "integer" },
+          "armLengthPx":       { "type": "integer" },
+          "legWidthPx":        { "type": "integer" },
+          "legLengthPx":       { "type": "integer" }
         }
       },
       "SheetMeta": {
